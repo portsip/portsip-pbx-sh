@@ -29,7 +29,7 @@ Install_docker_on_centos(){
  systemctl enable firewalld
  systemctl start firewalld
  firewall-cmd --permanent --new-service=portsip-pbx
- firewall-cmd --permanent --service=portsip-pbx --add-port=45000-64999/udp --add-port=25000-34999/udp --add-port=8881-8884/tcp --add-port=8899-8900/tcp --add-port=8887-8888/tcp --set-description="PortSIP PBX"
+  firewall-cmd --permanent --service=portsip-pbx --add-port=5060/udp --add-port=45000-64999/udp --add-port=25000-34999/udp --add-port=5065/tcp --add-port=8899-8900/tcp --add-port=8887-8888/tcp --add-port=8881-8884/tcp --set-description="PortSIP PBX"
  firewall-cmd --permanent --add-service=portsip-pbx
  firewall-cmd --reload
 
