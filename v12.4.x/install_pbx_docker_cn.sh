@@ -16,7 +16,9 @@ sudo systemctl enable ufw
 sudo  systemctl start ufw
 sudo ufw allow ssh
 sudo ufw allow 25000:34999,45000:64999/udp
+sudo ufw allow 5060/udp
 sudo ufw allow 8881:8884,8899:8900,8887:8888/tcp
+sudo ufw allow 5065/tcp
 sudo ufw reload
 }
 Install_docker_on_centos(){
@@ -30,7 +32,7 @@ Install_docker_on_centos(){
  systemctl enable firewalld
  systemctl start firewalld
  firewall-cmd --permanent --new-service=portsip-pbx
-  firewall-cmd --permanent --service=portsip-pbx --add-port=5060/udp --add-port=45000-64999/udp --add-port=25000-34999/udp --add-port=5065/tcp --add-port=8899-8900/tcp --add-port=8887-8888/tcp --add-port=8881-8884/tcp --set-description="PortSIP PBX"
+  firewall-cmd --permanent --service=portsip-pbx --add-port=5060/udp --add-port=5065/tcp --add-port=45000-64999/udp --add-port=25000-34999/udp --add-port=5065/tcp --add-port=8899-8900/tcp --add-port=8887-8888/tcp --add-port=8881-8884/tcp --set-description="PortSIP PBX"
  firewall-cmd --permanent --add-service=portsip-pbx
  firewall-cmd --reload
 
