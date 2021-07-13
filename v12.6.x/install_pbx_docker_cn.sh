@@ -15,17 +15,17 @@ system_check(){
 
 set_firewall(){
     echo ""
-    echo "====>stop ufw"
+    echo "====>Stop the ufw"
     echo ""
     systemctl stop ufw
     systemctl disable ufw
     echo ""
-    echo "====>enable firewalld"
+    echo "====>Enable the firewalld"
     echo ""
     systemctl enable firewalld
     systemctl start firewalld
     echo ""
-    echo "====>configure pbx's default firewall"
+    echo "====>Configure PBX's default firewall rules"
     echo ""
     firewall-cmd --zone=trusted --remove-interface=docker0 --permanent
     firewall-cmd --reload
@@ -36,26 +36,26 @@ set_firewall(){
     firewall-cmd --reload
     systemctl restart firewalld
     echo ""
-    echo "====>firewalld configure done"
+    echo "====>Firewalld configure done"
     echo ""
 }
 
 Install_docker_on_centos(){
     echo ""
-    echo "====>install on centos"
+    echo "====>Starting to install on centos"
     echo ""
     yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
     yum install -y yum-utils device-mapper-persistent-data lvm2 firewalld
     yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
     yum makecache fast
     echo ""
-    echo "====>try to install docker"
+    echo "====>Try to install docker"
     echo ""
     yum install -y docker-ce-20.10.7 docker-ce-cli-20.10.7 containerd.io
     systemctl enable docker
     systemctl stop docker
     echo ""
-    echo "====>docker installed"
+    echo "====>Successfully to install the docker"
     echo ""
 
     set_firewall
@@ -65,49 +65,49 @@ Install_docker_on_centos(){
 
 Install_docker_on_ubuntu(){
     echo ""
-    echo "====>install on ubuntu"
+    echo "====>Starting to install on ubuntu"
     echo ""
-    echo "====>try to update system"
+    echo "====>Try to update system"
     echo ""
     apt-get remove -y  docker docker-engine docker.io containerd runc
     apt update -y
     apt upgrade -y
     echo ""
-    echo "====>system updated"
+    echo "====>System updated"
     echo ""
-    echo "====>try to install firewalld"
+    echo "====>Try to install the firewalld"
     echo ""
     apt-get install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common firewalld
     if [ $? -ne 0 ];then
-        echo "failed to install dependencies"
+        echo "Failed to install dependencies"
         exit 1
     fi
     echo ""
-    echo "====>firewalld installed"
+    echo "====>Firewalld installed"
     echo ""
     curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | apt-key add -
     if [ $? -ne 0 ];then
-        echo "failed to install gpg"
+        echo "Failed to install gpg"
         exit 1
     fi
     add-apt-repository "deb [arch=amd64] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(lsb_release -cs) stable"
     if [ $? -ne 0 ];then
-        echo "failed to add aliyun repo"
+        echo "Failed to add aliyun repo"
         exit 1
     fi
     apt-get update -y 
     if [ $? -ne 0 ];then
-        echo "failed to update sofeware packages"
+        echo "Failed to update software packages"
         exit 1
     fi
     echo ""
-    echo "====>try to install docker"
+    echo "====>Try to install the docker"
     echo ""
     apt-get install docker-ce -y
     systemctl enable docker
     systemctl stop docker
     echo ""
-    echo "====>docker installed"
+    echo "====Successfully to install the docker"
     echo ""
 
     set_firewall
@@ -117,26 +117,26 @@ Install_docker_on_ubuntu(){
 
 Install_docker_on_debian(){
     echo ""
-    echo "====>install on debian"
+    echo "====>Starting to install on debian"
     echo ""
-    echo "====>try to update system"
+    echo "====>Try to update system"
     echo ""
     apt-get remove docker docker-engine docker.io containerd runc
     apt update -y 
     apt upgrade -y
     echo ""
-    echo "====>system updated"
+    echo "====>System updated"
 
     echo ""
-    echo "====>try to install firewalld"
+    echo "====>Try to install the firewalld"
     echo ""
     apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld -y
     systemctl stop firewalld
     echo ""
-    echo "====>firewalld installed"
+    echo "====>Firewalld installed"
     echo ""
 
-    echo "====>try to install docker"
+    echo "====>Try to install docker"
     echo ""
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -145,7 +145,7 @@ Install_docker_on_debian(){
     systemctl enable docker
     systemctl stop docker
     echo ""
-    echo "====>docker installed"
+    echo "====>Successfully to install the docker"
     echo ""
 
     sed -i 's#IndividualCalls=no#IndividualCalls=yes#g' /etc/firewalld/firewalld.conf
