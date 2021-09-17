@@ -93,7 +93,7 @@ services:
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "psql -h 'localhost' -U 'root' -c '\l'"]
+      test: ["CMD-SHELL", "psql -h 'localhost' -U 'root' -c '\\\\l'"]
       interval: 1s
       timeout: 3s
       retries: 30
