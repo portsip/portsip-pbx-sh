@@ -5,9 +5,9 @@ volumes:
     grafana_data: {}
 
 services:
-  heplify-server:
+  trace-heplify-server:
     image: portsip/trace-server:heplify
-    container_name: heplify-server
+    container_name: trace-heplify-server
     ports:
       - "9060:9060"
       - "9060:9060/udp"
@@ -19,7 +19,7 @@ services:
       - "HEPLIFYSERVER_HEPTCPADDR=0.0.0.0:9061"
       - "HEPLIFYSERVER_DBSHEMA=homer7"
       - "HEPLIFYSERVER_DBDRIVER=postgres"
-      - "HEPLIFYSERVER_DBADDR=db:5432"
+      - "HEPLIFYSERVER_DBADDR=trace-db:5432"
       - "HEPLIFYSERVER_DBUSER=root"
       - "HEPLIFYSERVER_DBPASS=homerSeven"
       - "HEPLIFYSERVER_DBDATATABLE=homer_data"
@@ -35,29 +35,29 @@ services:
       - HEPLIFYSERVER_SIPHEADER=callid,callid_aleg,method,ruri_user,ruri_domain,from_user,from_domain,from_tag,to_user,to_domain,to_tag,via,contact_user
     restart: unless-stopped
     depends_on:
-      - db
+      - trace-db
     expose:
       - 9090
       - 9096
     labels:
       org.label-schema.group: "monitoring"
 
-  homer-webapp:
-    container_name: homer-webapp
+  trace-webapp:
+    container_name: trace-webapp
     image: portsip/trace-server:webapp
     environment:
-      - "DB_HOST=db"
+      - "DB_HOST=trace-db"
       - "DB_USER=root"
       - "DB_PASS=homerSeven"
     restart: unless-stopped
     ports:
       - "9080:80"
     depends_on:
-      db:
+      trace-db:
         condition: service_healthy
 
-  db:
-    container_name: db
+  trace-db:
+    container_name: trace-db
     image: portsip/trace-server:postgres11-alpine
     restart: always
     environment:

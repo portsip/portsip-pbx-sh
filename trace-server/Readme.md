@@ -1,11 +1,5 @@
 # PortSIP Trace Server
 
-## 安装
-
-```
-/bin/sh trace-server.sh install
-```
-
 ## 启动
 
 ```
