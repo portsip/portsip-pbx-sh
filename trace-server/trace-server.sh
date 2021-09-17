@@ -178,9 +178,9 @@ install(){
         echo "use existing docker"
         echo ""
         docker --version
-        systemctl restart docker
         echo ""
     fi
+    systemctl restart docker
 
     # install docker compose
     which docker-compose
