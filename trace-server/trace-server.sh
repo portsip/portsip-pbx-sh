@@ -17,6 +17,89 @@ init(){
     #echo "disabled selinux"
 }
 
+generate_svc_config(){
+cat >./docker-compose.yml <<EOL
+# WARNING: DO NOT CHANGE THIS AUTOMATICALLY GENERATED FILE
+# WARNING: DO NOT CHANGE THIS AUTOMATICALLY GENERATED FILE
+# WARNING: DO NOT CHANGE THIS AUTOMATICALLY GENERATED FILE
+version: '2.1'
+
+volumes:
+    prometheus_data: {}
+    grafana_data: {}
+
+services:
+  trace-heplify-server:
+    image: portsip/trace-server:heplify
+    container_name: trace-heplify-server
+    ports:
+      - "9060:9060"
+      - "9060:9060/udp"
+      - "9061:9061/tcp"
+    command:
+      - './heplify-server'
+    environment:
+      - "HEPLIFYSERVER_HEPADDR=0.0.0.0:9060"
+      - "HEPLIFYSERVER_HEPTCPADDR=0.0.0.0:9061"
+      - "HEPLIFYSERVER_DBSHEMA=homer7"
+      - "HEPLIFYSERVER_DBDRIVER=postgres"
+      - "HEPLIFYSERVER_DBADDR=trace-db:5432"
+      - "HEPLIFYSERVER_DBUSER=root"
+      - "HEPLIFYSERVER_DBPASS=homerSeven"
+      - "HEPLIFYSERVER_DBDATATABLE=homer_data"
+      - "HEPLIFYSERVER_DBCONFTABLE=homer_config"
+      - "HEPLIFYSERVER_DBROTATE=true"
+      - "HEPLIFYSERVER_DBDROPDAYS=1"
+      - "HEPLIFYSERVER_LOGLVL=info"
+      - "HEPLIFYSERVER_LOGSTD=true"
+      - "HEPLIFYSERVER_DEDUP=false"
+      - HEPLIFYSERVER_ALEGIDS=X-Session-Id
+      - HEPLIFYSERVER_FORCEALEGID=false
+      - HEPLIFYSERVER_CUSTOMHEADER=X-Session-Id,X-CID
+      - HEPLIFYSERVER_SIPHEADER=callid,callid_aleg,method,ruri_user,ruri_domain,from_user,from_domain,from_tag,to_user,to_domain,to_tag,via,contact_user
+    restart: unless-stopped
+    depends_on:
+      - trace-db
+    expose:
+      - 9090
+      - 9096
+    labels:
+      org.label-schema.group: "monitoring"
+
+  trace-webapp:
+    container_name: trace-webapp
+    image: portsip/trace-server:webapp
+    environment:
+      - "DB_HOST=trace-db"
+      - "DB_USER=root"
+      - "DB_PASS=homerSeven"
+    restart: unless-stopped
+    ports:
+      - "9080:80"
+    depends_on:
+      trace-db:
+        condition: service_healthy
+
+  trace-db:
+    container_name: trace-db
+    image: portsip/trace-server:postgres11-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: homerSeven
+      POSTGRES_USER: root
+    expose:
+      - 5432
+    restart: unless-stopped
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "psql -h 'localhost' -U 'root' -c '\l'"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+EOL
+}
+
 # install docker
 install_docker_on_centos(){
     echo ""
@@ -114,6 +197,7 @@ install(){
 
 start(){
     # up trace server
+    generate_svc_config
     echo "try to start trace server"
     systemctl start docker || exit -1
     echo ""
@@ -124,6 +208,7 @@ start(){
 
 stop(){
     # stop trace server
+    generate_svc_config
     echo "try to stop trace server"
     echo ""
     docker-compose stop
