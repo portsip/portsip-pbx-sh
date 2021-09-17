@@ -178,6 +178,7 @@ install(){
         echo "use existing docker"
         echo ""
         docker --version
+        systemctl restart docker
         echo ""
     fi
 
