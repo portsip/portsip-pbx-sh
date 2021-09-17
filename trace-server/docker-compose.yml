@@ -1,0 +1,75 @@
+version: '2.1'
+
+volumes:
+    prometheus_data: {}
+    grafana_data: {}
+
+services:
+  heplify-server:
+    image: portsip/trace-server:heplify
+    container_name: heplify-server
+    ports:
+      - "9060:9060"
+      - "9060:9060/udp"
+      - "9061:9061/tcp"
+    command:
+      - './heplify-server'
+    environment:
+      - "HEPLIFYSERVER_HEPADDR=0.0.0.0:9060"
+      - "HEPLIFYSERVER_HEPTCPADDR=0.0.0.0:9061"
+      - "HEPLIFYSERVER_DBSHEMA=homer7"
+      - "HEPLIFYSERVER_DBDRIVER=postgres"
+      - "HEPLIFYSERVER_DBADDR=db:5432"
+      - "HEPLIFYSERVER_DBUSER=root"
+      - "HEPLIFYSERVER_DBPASS=homerSeven"
+      - "HEPLIFYSERVER_DBDATATABLE=homer_data"
+      - "HEPLIFYSERVER_DBCONFTABLE=homer_config"
+      - "HEPLIFYSERVER_DBROTATE=true"
+      - "HEPLIFYSERVER_DBDROPDAYS=1"
+      - "HEPLIFYSERVER_LOGLVL=info"
+      - "HEPLIFYSERVER_LOGSTD=true"
+      - "HEPLIFYSERVER_DEDUP=false"
+      - HEPLIFYSERVER_ALEGIDS=X-Session-Id
+      - HEPLIFYSERVER_FORCEALEGID=false
+      - HEPLIFYSERVER_CUSTOMHEADER=X-Session-Id,X-CID
+      - HEPLIFYSERVER_SIPHEADER=callid,callid_aleg,method,ruri_user,ruri_domain,from_user,from_domain,from_tag,to_user,to_domain,to_tag,via,contact_user
+    restart: unless-stopped
+    depends_on:
+      - db
+    expose:
+      - 9090
+      - 9096
+    labels:
+      org.label-schema.group: "monitoring"
+
+  homer-webapp:
+    container_name: homer-webapp
+    image: portsip/trace-server:webapp
+    environment:
+      - "DB_HOST=db"
+      - "DB_USER=root"
+      - "DB_PASS=homerSeven"
+    restart: unless-stopped
+    ports:
+      - "9080:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    container_name: db
+    image: portsip/trace-server:postgres11-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: homerSeven
+      POSTGRES_USER: root
+    expose:
+      - 5432
+    restart: unless-stopped
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "psql -h 'localhost' -U 'root' -c '\\l'"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
