@@ -76,7 +76,7 @@ start(){
 stop(){
     # stop trace server
     echo "try to stop trace server"
-    docker-compose stop || exit -1
+    docker-compose stop
     echo "succeed to stop trace server"
 }
 
