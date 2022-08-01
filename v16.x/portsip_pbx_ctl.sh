@@ -108,6 +108,7 @@ services:
     environment:
       - LD_LIBRARY_PATH=/usr/local/lib
       - IP_ADDRESS=${pbx_ip_address}
+      - LD_PRELOAD=/usr/local/lib/libmimalloc.so
     cap_add:
       - SYS_PTRACE
     restart: always
