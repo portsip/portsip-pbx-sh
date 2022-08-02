@@ -145,29 +145,6 @@ services:
       database:
         condition: service_healthy
 
-  logging: 
-    image: ${pbx_log_img}
-    command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]
-    network_mode: host
-    pid: host
-    user: portsip
-    container_name: "PortSIP.Logging"
-    volumes:
-      - pbx-data:/var/lib/portsip/pbx
-      - /etc/localtime:/etc/localtime
-    environment:
-      - POSTGRES_PASSWORD=${pbx_db_password}
-    cap_add:
-      - SYS_PTRACE
-    restart: always
-    depends_on:
-      initdt:
-        condition: service_completed_successfully
-      nats:
-        condition: service_healthy
-      database:
-        condition: service_healthy
-
   gateway: 
     image: ${pbx_img}
     command:  ["/usr/local/bin/apigate", "serve", "-D","/var/lib/portsip/pbx"]
@@ -199,6 +176,8 @@ services:
     depends_on:
       initdt:
         condition: service_completed_successfully
+      gateway:
+        condition: service_started
 
   wsspublisher: 
     image: ${pbx_img}
@@ -221,6 +200,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   voicemail: 
     image: ${pbx_img}
@@ -243,6 +224,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   vr: 
     image: ${pbx_img}
@@ -265,6 +248,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   # PortSIP Push Server
   pushserver: 
@@ -284,6 +269,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   # PortSIP Provision Sever
   prvserver: 
@@ -307,6 +294,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   # PortSIP Mail Gateway
   mailgateway: 
@@ -326,6 +315,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   # PortSIP Conference Server
   conf: 
@@ -349,6 +340,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   # PortSIP Call Queue Server
   callqueue: 
@@ -372,6 +365,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   # PortSIP Call Park Server
   callpark: 
@@ -395,6 +390,8 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
 
   # PortSIP Announcement Server
   anncmnt: 
@@ -418,6 +415,59 @@ services:
         condition: service_healthy
       database:
         condition: service_healthy
+      callmanager:
+        condition: service_started
+
+  logging: 
+    image: ${pbx_log_img}
+    command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]
+    network_mode: host
+    pid: host
+    user: portsip
+    container_name: "PortSIP.Logging"
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+    environment:
+      - POSTGRES_PASSWORD=${pbx_db_password}
+    cap_add:
+      - SYS_PTRACE
+    restart: always
+    depends_on:
+      initdt:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+      callmanager:
+        condition: service_started
+      mediaserver:
+        condition: service_started
+      gateway:
+        condition: service_started
+      wsspublisher:
+        condition: service_started
+      voicemail:
+        condition: service_started
+      vr:
+        condition: service_started
+      pushserver:
+        condition: service_started
+      prvserver:
+        condition: service_started
+      mailgateway:
+        condition: service_started
+      conf:
+        condition: service_started
+      callqueue:
+        condition: service_started
+      callpark:
+        condition: service_started
+      anncmnt:
+        condition: service_started
+      
+
 
 volumes:
   pbx-db:
