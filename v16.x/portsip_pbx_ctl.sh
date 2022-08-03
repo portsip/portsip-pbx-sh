@@ -13,7 +13,6 @@ fi
 # $3: pbx_img
 # $4: pbx_db_img
 # $5: pbx_db_password
-# $6: pbx_log_log
 export_configure() {
     echo ""
     echo -e "\t => export configure file 'docker-compose.yml' <="
@@ -24,7 +23,6 @@ export_configure() {
     pbx_img=$3
     pbx_db_img=$4
     pbx_db_password=$5
-    pbx_log_img=$6
 
     cat << FEOF > docker-compose.yml
 version: "3.9"
@@ -418,57 +416,6 @@ services:
       callmanager:
         condition: service_started
 
-  logging: 
-    image: ${pbx_log_img}
-    command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]
-    network_mode: host
-    pid: host
-    user: portsip
-    container_name: "PortSIP.Logging"
-    volumes:
-      - pbx-data:/var/lib/portsip/pbx
-      - /etc/localtime:/etc/localtime
-    environment:
-      - POSTGRES_PASSWORD=${pbx_db_password}
-    cap_add:
-      - SYS_PTRACE
-    restart: always
-    depends_on:
-      initdt:
-        condition: service_completed_successfully
-      nats:
-        condition: service_healthy
-      database:
-        condition: service_healthy
-      callmanager:
-        condition: service_started
-      mediaserver:
-        condition: service_started
-      gateway:
-        condition: service_started
-      wsspublisher:
-        condition: service_started
-      voicemail:
-        condition: service_started
-      vr:
-        condition: service_started
-      pushserver:
-        condition: service_started
-      prvserver:
-        condition: service_started
-      mailgateway:
-        condition: service_started
-      conf:
-        condition: service_started
-      callqueue:
-        condition: service_started
-      callpark:
-        condition: service_started
-      anncmnt:
-        condition: service_started
-      
-
-
 volumes:
   pbx-db:
     driver: local
@@ -504,7 +451,6 @@ create() {
     pbx_img=
     db_listen_address=0.0.0.0
     db_img="portsip/postgresql:14"
-    log_img="portsip/fluent-bit:1.9.6"
     #  generate db password
     db_password=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20`
     # parse parameters
@@ -522,9 +468,6 @@ create() {
                 ;;
             d)
                 db_img=${OPTARG}
-                ;;
-            l)
-                log_img=${OPTARG}
                 ;;
         esac
     done
@@ -548,11 +491,6 @@ create() {
         exit -1
     fi
 
-    if [ -z "$log_img" ]; then
-        echo -e "\t Option -l not specified"
-        exit -1
-    fi
-
     if [ -f $data_path/pbx/system.ini ] 
     then
         db_password=`sed -nr "/^\[database\]/ { :l /^superuser_password[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;}" $data_path/pbx/system.ini`
@@ -562,7 +500,7 @@ create() {
         exit -1
     fi
 
-    echo -e "\t use datapath $data_path, ip $ip_address, img $pbx_img, db img $db_img, log img $log_img"
+    echo -e "\t use datapath $data_path, ip $ip_address, img $pbx_img, db img $db_img"
     echo ""
 
     # check datapath whether exist
@@ -594,7 +532,7 @@ PBX_DB_IMG=$db_img
 DB_PASSWORD=$db_password
 EOF
 
-    export_configure $data_path $ip_address $pbx_img $db_img $db_password $log_img
+    export_configure $data_path $ip_address $pbx_img $db_img $db_password
     # run pbx service
     docker compose up -d
 
