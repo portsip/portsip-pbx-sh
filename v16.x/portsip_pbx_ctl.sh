@@ -249,13 +249,13 @@ services:
       callmanager:
         condition: service_started
 
-  # PortSIP Push Server
-  pushserver: 
+  # PortSIP Notification Center
+  notifycenter: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/pushserver", "-D","/var/lib/portsip/pbx"]
+    command: ["/usr/local/bin/notifycenter", "-D","/var/lib/portsip/pbx"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.PushServer"
+    container_name: "PortSIP.NotificationCenter"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -284,27 +284,6 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
-    depends_on:
-      initdt:
-        condition: service_completed_successfully
-      nats:
-        condition: service_healthy
-      database:
-        condition: service_healthy
-      callmanager:
-        condition: service_started
-
-  # PortSIP Mail Gateway
-  mailgateway: 
-    image: ${pbx_img}
-    command: ["/usr/local/bin/mailgateway", "-D","/var/lib/portsip/pbx"]
-    network_mode: host
-    user: portsip
-    container_name: "PortSIP.MailGateway"
-    volumes:
-      - pbx-data:/var/lib/portsip/pbx
-      - /etc/localtime:/etc/localtime
     restart: always
     depends_on:
       initdt:
