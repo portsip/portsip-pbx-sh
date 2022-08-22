@@ -62,20 +62,6 @@ services:
       database:
         condition: service_healthy
 
-  wdfs: 
-    image: ${pbx_img}
-    command: ["/usr/local/bin/weed", "-logdir=/var/lib/portsip/pbx/log", "-v=0", "server", "-ip=127.0.0.1", "-master.port=9333", "-master.volumeSizeLimitMB=30000", "-volume.max=1750", "-volume.port=8882", "-filer.port=8889", "-dir=/var/lib/portsip/pbx/filedata", "-volume.publicUrl=${pbx_ip_address}:8882"]
-    network_mode: host
-    user: portsip
-    container_name: "PortSIP.Weed"
-    volumes:
-      - pbx-data:/var/lib/portsip/pbx
-      - /etc/localtime:/etc/localtime
-    restart: always
-    depends_on:
-      initdt:
-        condition: service_completed_successfully
-
   nats: 
     image: ${pbx_img}
     command: ["/usr/local/bin/nats-server", "--log", "/var/lib/portsip/pbx/log/nats.log", "--http_port", "8222"]
@@ -592,11 +578,6 @@ restart() {
         docker compose start
         ;;
 
-    wdfs)
-        docker compose stop -t 100
-        docker compose start
-        ;;
-
     *)
         docker compose stop -t 100 $service_name
         docker compose start $service_name
@@ -667,10 +648,6 @@ stop() {
         ;;
 
     nats)
-        docker compose stop -t 100
-        ;;
-
-    wdfs)
         docker compose stop -t 100
         ;;
 
