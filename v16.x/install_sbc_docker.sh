@@ -27,14 +27,14 @@ set_firewall(){
     systemctl enable firewalld
     systemctl start firewalld
     echo ""
-    echo "====>Configure PBX's default firewall rules"
+    echo "====>Configure SBC's default firewall rules"
     echo ""
     firewall-cmd --zone=trusted --remove-interface=docker0 --permanent
     firewall-cmd --reload
     firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=portsip-pbx || true
-    firewall-cmd --permanent --service=portsip-pbx --add-port=5060/udp --add-port=45000-64999/udp --add-port=8884-8900/tcp --add-port=8881/tcp --set-description="PortSIP PBX"
-    firewall-cmd --permanent --add-service=portsip-pbx
+    firewall-cmd --permanent --new-service=portsip-sbc || true
+    firewall-cmd --permanent --service=portsip-sbc --add-port=25000-34999/udp --add-port=5065/tcp --add-port=8883/tcp --set-description="PortSIP SBC"
+    firewall-cmd --permanent --add-service=portsip-sbc
     firewall-cmd --reload
     systemctl restart firewalld
     echo ""

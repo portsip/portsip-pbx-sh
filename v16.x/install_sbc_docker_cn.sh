@@ -27,14 +27,14 @@ set_firewall(){
     systemctl enable firewalld
     systemctl start firewalld
     echo ""
-    echo "====>Configure PBX's default firewall rules"
+    echo "====>Configure SBC's default firewall rules"
     echo ""
     firewall-cmd --zone=trusted --remove-interface=docker0 --permanent
     firewall-cmd --reload
     firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=portsip-pbx || true
-    firewall-cmd --permanent --service=portsip-pbx --add-port=5060/udp --add-port=45000-64999/udp --add-port=8884-8900/tcp --add-port=8881/tcp --set-description="PortSIP PBX"
-    firewall-cmd --permanent --add-service=portsip-pbx
+    firewall-cmd --permanent --new-service=portsip-sbc || true
+    firewall-cmd --permanent --service=portsip-sbc --add-port=25000-34999/udp --add-port=5065/tcp --add-port=8883/tcp --set-description="PortSIP SBC"
+    firewall-cmd --permanent --add-service=portsip-sbc
     firewall-cmd --reload
     systemctl restart firewalld
     echo ""
@@ -49,8 +49,7 @@ install_docker_on_centos(){
     echo ""
     yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
     yum install -y yum-utils device-mapper-persistent-data lvm2 firewalld
-    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-    
+    yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
     yum makecache fast
     echo ""
     echo "====>Try to install docker"
@@ -87,15 +86,13 @@ install_docker_on_ubuntu(){
     echo ""
     echo "====>Firewalld installed"
     echo ""
-    mkdir -p /etc/apt/keyrings
-    rm -f /etc/apt/keyrings/docker.gpg || true
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get update -y 
+    curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | apt-key add -
+    add-apt-repository -y "deb [arch=amd64] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update -y 
     echo ""
     echo "====>Try to install the docker"
     echo ""
-    DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-compose-plugin -y
+    apt-get install docker-ce docker-compose-plugin -y
     systemctl enable docker
     systemctl stop docker
     echo ""
