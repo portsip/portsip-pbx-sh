@@ -12,13 +12,13 @@ fi
 # $2: sbc_img
 export_configure() {
     echo ""
-    echo -e "\t => export configure file 'docker-compose.yml' <="
+    echo -e "\t => export configure file 'docker-compose-portsip-sbc.yml' <="
     echo ""
 
     sbc_data_path=$1
     sbc_img=$2
 
-    cat << FEOF > docker-compose.yml
+    cat << FEOF > docker-compose-portsip-sbc.yml
 version: "3.9"
 services:  
   initdt:
@@ -129,7 +129,7 @@ create() {
     chmod 755 $data_path
 
     # write configure file
-    cat << EOF > .configure
+    cat << EOF > .configure_sbc
 SBC_DATA_PATH=$data_path
 SBC_IMG=$sbc_img
 EOF
@@ -137,7 +137,7 @@ EOF
     export_configure $data_path $sbc_img
 
     # run sbc service
-    docker compose up -d
+    docker compose -f docker-compose-portsip-sbc.yml up -d
 
     echo ""
     echo -e "\t done"
@@ -166,13 +166,13 @@ status() {
         echo ""
         echo "status all services"
         echo ""
-        docker compose ls -a
-        docker compose ps -a
+        docker compose -f docker-compose-portsip-sbc.yml ls -a
+        docker compose -f docker-compose-portsip-sbc.yml ps -a
     else
         echo ""
         echo "status service $service_name"
         echo ""
-        docker compose ps $service_name
+        docker compose -f docker-compose-portsip-sbc.yml ps $service_name
     fi
 }
 
@@ -197,15 +197,15 @@ restart() {
         echo ""
         echo "restart all services"
         echo ""
-        docker compose restart
+        docker compose -f docker-compose-portsip-sbc.yml restart
         exit 0
     fi
 
     echo ""
     echo "restart service $service_name"
     echo ""
-    docker compose stop -t 100 $service_name
-    docker compose start $service_name
+    docker compose -f docker-compose-portsip-sbc.yml stop -t 100 $service_name
+    docker compose -f docker-compose-portsip-sbc.yml start $service_name
 }
 
 start() {
@@ -229,12 +229,12 @@ start() {
         echo ""
         echo "start all services"
         echo ""
-        docker compose start
+        docker compose -f docker-compose-portsip-sbc.yml start
     else
         echo ""
         echo "start service $service_name"
         echo ""
-        docker compose start $service_name
+        docker compose -f docker-compose-portsip-sbc.yml start $service_name
     fi
 }
 
@@ -259,20 +259,20 @@ stop() {
         echo ""
         echo "stop all services"
         echo ""
-        docker compose stop
+        docker compose -f docker-compose-portsip-sbc.yml stop
         exit 0
     fi
     echo ""
     echo "stop service $service_name"
     echo ""
-    docker compose stop -t 100 $service_name
+    docker compose -f docker-compose-portsip-sbc.yml stop -t 100 $service_name
 }
 
 rm() {
     # remove command firstly
     shift
 
-    docker compose down
+    docker compose -f docker-compose-portsip-sbc.yml down
 
     docker volume rm `docker volume ls  -q | grep sbc-data` || true
 }

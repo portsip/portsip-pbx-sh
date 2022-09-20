@@ -15,7 +15,7 @@ fi
 # $5: pbx_db_password
 export_configure() {
     echo ""
-    echo -e "\t => export configure file 'docker-compose.yml' <="
+    echo -e "\t => export configure file 'docker-compose-portsip-pbx.yml' <="
     echo ""
 
     pbx_data_path=$1
@@ -24,7 +24,7 @@ export_configure() {
     pbx_db_img=$4
     pbx_db_password=$5
 
-    cat << FEOF > docker-compose.yml
+    cat << FEOF > docker-compose-portsip-pbx.yml
 version: "3.9"
 services:
   database:
@@ -490,7 +490,7 @@ create() {
     chmod 755 $data_path
 
     # write configure file
-    cat << EOF > .configure
+    cat << EOF > .configure_pbx
 PBX_DATA_PATH=$data_path
 IP_ADDRESS=$ip_address
 PBX_IMG=$pbx_img
@@ -500,7 +500,7 @@ EOF
 
     export_configure $data_path $ip_address $pbx_img $db_img $db_password
     # run pbx service
-    docker compose up -d
+    docker compose -f docker-compose-portsip-pbx.yml up -d
 
     echo ""
     echo -e "\t done"
@@ -529,13 +529,13 @@ status() {
         echo ""
         echo "status all services"
         echo ""
-        docker compose ls -a
-        docker compose ps -a
+        docker compose -f docker-compose-portsip-pbx.yml ls -a
+        docker compose -f docker-compose-portsip-pbx.yml ps -a
     else
         echo ""
         echo "status service $service_name"
         echo ""
-        docker compose ps $service_name
+        docker compose -f docker-compose-portsip-pbx.yml ps $service_name
     fi
 }
 
@@ -560,7 +560,7 @@ restart() {
         echo ""
         echo "restart all services"
         echo ""
-        docker compose restart
+        docker compose -f docker-compose-portsip-pbx.yml restart
         exit 0
     fi
 
@@ -569,18 +569,18 @@ restart() {
     echo ""
     case $service_name in
     database)
-        docker compose stop -t 100
-        docker compose start
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 100
+        docker compose -f docker-compose-portsip-pbx.yml start
         ;;
 
     nats)
-        docker compose stop -t 100
-        docker compose start
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 100
+        docker compose -f docker-compose-portsip-pbx.yml start
         ;;
 
     *)
-        docker compose stop -t 100 $service_name
-        docker compose start $service_name
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 100 $service_name
+        docker compose -f docker-compose-portsip-pbx.yml start $service_name
         ;;
     esac
 }
@@ -606,12 +606,12 @@ start() {
         echo ""
         echo "start all services"
         echo ""
-        docker compose start
+        docker compose -f docker-compose-portsip-pbx.yml start
     else
         echo ""
         echo "start service $service_name"
         echo ""
-        docker compose start $service_name
+        docker compose -f docker-compose-portsip-pbx.yml start $service_name
     fi
 }
 
@@ -636,7 +636,7 @@ stop() {
         echo ""
         echo "stop all services"
         echo ""
-        docker compose stop
+        docker compose -f docker-compose-portsip-pbx.yml stop
         exit 0
     fi
     echo ""
@@ -644,15 +644,15 @@ stop() {
     echo ""
     case $service_name in
     database)
-        docker compose stop -t 100
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 100
         ;;
 
     nats)
-        docker compose stop -t 100
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 100
         ;;
 
     *)
-        docker compose stop -t 100 $service_name
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 100 $service_name
         ;;
     esac
 }
@@ -673,7 +673,7 @@ rm() {
     #     esac
     # done
 
-    docker compose down
+    docker compose -f docker-compose-portsip-pbx.yml down
 
     docker volume rm `docker volume ls  -q | grep pbx-data` || true
     docker volume rm `docker volume ls  -q | grep pbx-db` || true

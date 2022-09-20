@@ -1,19 +1,6 @@
 #!/bin/bash
 
-set -e
-
-system_check(){
-    if [  -f "/etc/redhat-release" ];then
-        install_docker_on_centos
-    elif [ -f "/etc/lsb-release" ];then
-        install_docker_on_ubuntu
-    elif [ -f "/etc/debian_version" ];then
-        install_docker_on_debian
-    else
-        echo "Unknown operating system"
-        exit
-    fi
-}
+set -ex
 
 set_firewall(){
     echo ""
@@ -58,14 +45,10 @@ install_docker_on_centos(){
     echo ""
     yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     systemctl enable docker
-    systemctl stop docker
+    #systemctl stop docker
     echo ""
     echo "====>Successfully to install the docker"
     echo ""
-
-    set_firewall
-
-    systemctl start docker
 }
 
 # install docker and docker compose plugin
@@ -98,14 +81,10 @@ install_docker_on_ubuntu(){
     echo ""
     DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-compose-plugin -y
     systemctl enable docker
-    systemctl stop docker
+    #systemctl stop docker
     echo ""
     echo "====Successfully to install the docker"
     echo ""
-
-    set_firewall
-
-    systemctl start docker
 }
 
 # install docker and docker compose plugin
@@ -138,16 +117,25 @@ install_docker_on_debian(){
     apt-get update -y
     apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
     systemctl enable docker
-    systemctl stop docker
+    #systemctl stop docker
     echo ""
     echo "====>Successfully to install the docker"
     echo ""
 
     sed -i 's#IndividualCalls=no#IndividualCalls=yes#g' /etc/firewalld/firewalld.conf
-
-    set_firewall
-
-    systemctl start docker
 }
 
-system_check
+if [  -f "/etc/redhat-release" ];then
+    install_docker_on_centos
+elif [ -f "/etc/lsb-release" ];then
+    install_docker_on_ubuntu
+elif [ -f "/etc/debian_version" ];then
+    install_docker_on_debian
+else
+    echo "Unknown operating system"
+    exit
+fi
+
+set_firewall
+
+systemctl start docker
