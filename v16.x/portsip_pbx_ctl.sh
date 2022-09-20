@@ -7,6 +7,11 @@ then
     exit -1
 fi
 
+if [ ! -d "./pbx" ]; then
+    mkdir pbx
+fi
+
+cd pbx
 
 # $1: pbx_data_path
 # $2: pbx_ip_address

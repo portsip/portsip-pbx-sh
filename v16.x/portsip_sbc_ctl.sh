@@ -7,6 +7,11 @@ then
     exit -1
 fi
 
+if [ ! -d "./sbc" ]; then
+    mkdir sbc
+fi
+
+cd sbc
 
 # $1: sbc_data_path
 # $2: sbc_img
