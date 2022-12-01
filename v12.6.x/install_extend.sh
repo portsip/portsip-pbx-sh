@@ -59,7 +59,7 @@ export_supervisor_cfg() {
 
     mkdir -p ${cfg_path} || true
 
-    if [ ${service} == media ]; 
+    if [ "${service}" = "media" ]
     then
         echo " export media configure file"
 cat <<END > ${cfg_path}/media.conf
