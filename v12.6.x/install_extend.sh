@@ -152,7 +152,7 @@ start() {
             -e POSTGRES_LISTEN_ADDRESSES=* \
             -e IP_ADDRESS=${pbx_addr} \
             -e PRIVATE_IP_ADDRESS=${pbx_addr} ${img}
-    sleep 30;
+    sleep 120;
 
     docker stop -t 120 ${container_name} || true
 
