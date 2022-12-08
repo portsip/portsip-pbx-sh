@@ -58,7 +58,7 @@ services:
 
   websvc: 
     image: ${sbc_img}
-    command: ["/usr/sbin/nginx", "-c", "/etc/nginx/nginx.conf"]
+    command: ["/usr/sbin/nginx", "-c", "/var/lib/portsip/sbc/nginx/nginx.conf"]
     network_mode: host
     #user: www-data
     container_name: "PortSIP.SBC.Admin"
