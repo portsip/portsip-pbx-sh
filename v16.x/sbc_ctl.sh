@@ -151,7 +151,7 @@ restart() {
         echo ""
         echo "restart all services"
         echo ""
-        dockre restart -t 300 PortSIP.SBC
+        docker restart -t 300 PortSIP.SBC
         exit
     fi
 
