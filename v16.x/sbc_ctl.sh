@@ -1,95 +1,36 @@
 #!/usr/bin/env bash
 set -e
 
+create_help() {
+    echo
+    echo  "\t command run options:"
+    echo  "\t     -p <path>: required, sbc data path"
+    echo  "\t     -i <docker image>: required, sbc docker image"
+    echo
+}
+
+command_help() {
+    echo
+    echo  "\t use command:"
+    echo  "\t     run"
+    echo  "\t     status"
+    echo  "\t     restart"
+    echo  "\t     start"
+    echo  "\t     stop"
+    echo  "\t     rm"
+    echo 
+}
+
 if [ -z $1 ];
 then 
-    echo -e "\t => need parameters <="
-    exit -1
+    command_help
+    exit
 fi
-
-if [ ! -d "./sbc" ]; then
-    mkdir sbc
-fi
-
-cd sbc
-
-# $1: sbc_data_path
-# $2: sbc_img
-export_configure() {
-    echo ""
-    echo -e "\t => export configure file 'docker-compose-portsip-sbc.yml' <="
-    echo ""
-
-    sbc_data_path=$1
-    sbc_img=$2
-
-    cat << FEOF > docker-compose-portsip-sbc.yml
-version: "3.9"
-services:  
-  initdt:
-    image: ${sbc_img}
-    command: [ "/usr/local/bin/initdt.sh"]
-    network_mode: host
-    user: root
-    container_name: "PortSIP.SBC.Initdt"
-    volumes:
-      - /etc/localtime:/etc/localtime
-      - sbc-data:/var/lib/portsip/sbc
-
-  sbc: 
-    image: ${sbc_img}
-    command: ["/usr/local/bin/portsbc", "-D","/var/lib/portsip/sbc", "start"]
-    network_mode: host
-    user: portsip
-    container_name: "PortSIP.SBC"
-    volumes:
-      - sbc-data:/var/lib/portsip/sbc
-      - /etc/localtime:/etc/localtime
-    environment:
-      - LD_LIBRARY_PATH=/usr/local/lib
-      - LD_PRELOAD=/usr/local/lib/libmimalloc.so
-      - MIMALLOC_PAGE_RESET=1
-    cap_add:
-      - SYS_PTRACE
-    restart: always
-    depends_on:
-      initdt:
-        condition: service_completed_successfully
-
-  websvc: 
-    image: ${sbc_img}
-    command: ["/usr/sbin/nginx", "-c", "/var/lib/portsip/sbc/nginx/nginx.conf"]
-    network_mode: host
-    #user: www-data
-    container_name: "PortSIP.SBC.Admin"
-    volumes:
-      - sbc-data:/var/lib/portsip/sbc
-      - /etc/localtime:/etc/localtime
-    restart: always
-    depends_on:
-      initdt:
-        condition: service_completed_successfully
-
-volumes:
-  sbc-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${sbc_data_path}/sbc
-FEOF
-    echo ""
-    echo -e "\t => configure file done <="
-    echo ""
-    echo ""
-}
 
 create() {
     echo ""
     echo "==> try to create sbc service <=="
     echo ""
-    #echo " args: $@"
-    #echo "The number of arguments passed in are : $#"
 
     # remove command firstly
     shift
@@ -111,22 +52,26 @@ create() {
 
     # check parameters is exist
     if [ -z "$data_path" ]; then
-        echo -e "\t Option data path(-p) not specified"
-        exit -1
+        echo  "\t data path(-p) not specified"
+        create_help
+        exit
     fi
     if [ -z "$sbc_img" ]; then
-        echo -e "\t Option sbc docker image(-i) not specified"
-        exit -1
+        echo  "\t sbc docker image(-i) not specified"
+        create_help
+        exit
     fi
 
-    echo -e "\t use datapath $data_path, ip $ip_address, img $sbc_img"
+    echo  "\t use datapath $data_path, img $sbc_img"
     echo ""
+
+    docker pull $sbc_img
 
     # check datapath whether exist
     if [ ! -d "$data_path/sbc" ]; then
-        echo -e "\t datapath $data_path/sbc not exist, try to reate it"
+        echo  "\t datapath $data_path/sbc not exist, try to reate it"
         mkdir -p $data_path/sbc
-        echo -e "\t created"
+        echo  "\t created"
         echo ""
     fi
 
@@ -139,13 +84,18 @@ SBC_DATA_PATH=$data_path
 SBC_IMG=$sbc_img
 EOF
 
-    export_configure $data_path $sbc_img
-
     # run sbc service
-    docker compose -f docker-compose-portsip-sbc.yml up -d
+    docker run -d \
+        --name PortSIP.SBC \
+        --restart=always \
+        --cap-add=SYS_PTRACE \
+        --network=host \
+        -v $data_path:/var/lib/portsip/sbc \
+        -v /etc/localtime:/etc/localtime:ro  \
+        $sbc_img
 
     echo ""
-    echo -e "\t done"
+    echo  "\t done"
     echo ""
 }
 
@@ -171,13 +121,12 @@ status() {
         echo ""
         echo "status all services"
         echo ""
-        docker compose -f docker-compose-portsip-sbc.yml ls -a
-        docker compose -f docker-compose-portsip-sbc.yml ps -a
+        docker exec PortSIP.SBC supervisorctl status 
     else
         echo ""
         echo "status service $service_name"
         echo ""
-        docker compose -f docker-compose-portsip-sbc.yml ps $service_name
+        docker exec PortSIP.SBC supervisorctl status $service_name
     fi
 }
 
@@ -202,15 +151,14 @@ restart() {
         echo ""
         echo "restart all services"
         echo ""
-        docker compose -f docker-compose-portsip-sbc.yml restart
-        exit 0
+        dockre restart -t 300 PortSIP.SBC
+        exit
     fi
 
     echo ""
     echo "restart service $service_name"
     echo ""
-    docker compose -f docker-compose-portsip-sbc.yml stop -t 100 $service_name
-    docker compose -f docker-compose-portsip-sbc.yml start $service_name
+    docker exec PortSIP.SBC supervisorctl restart $service_name
 }
 
 start() {
@@ -234,12 +182,12 @@ start() {
         echo ""
         echo "start all services"
         echo ""
-        docker compose -f docker-compose-portsip-sbc.yml start
+        docker start PortSIP.SBC
     else
         echo ""
         echo "start service $service_name"
         echo ""
-        docker compose -f docker-compose-portsip-sbc.yml start $service_name
+        docker exec PortSIP.SBC supervisorctl start $service_name
     fi
 }
 
@@ -264,22 +212,21 @@ stop() {
         echo ""
         echo "stop all services"
         echo ""
-        docker compose -f docker-compose-portsip-sbc.yml stop
-        exit 0
+        docker stop -t 300 PortSIP.SBC
+        exit
     fi
     echo ""
     echo "stop service $service_name"
     echo ""
-    docker compose -f docker-compose-portsip-sbc.yml stop -t 100 $service_name
+    docker exec PortSIP.SBC supervisorctl stop $service_name
 }
 
 rm() {
     # remove command firstly
     shift
 
-    docker compose -f docker-compose-portsip-sbc.yml down
-
-    docker volume rm `docker volume ls  -q | grep sbc-data` || true
+    docker stop -t 300 PortSIP.SBC
+    docker rm -f PortSIP.SBC
 }
 
 case $1 in
@@ -308,7 +255,7 @@ rm)
     ;;
 
 *)
-    echo -e "\t error command"
+    command_help
     ;;
 esac
 
