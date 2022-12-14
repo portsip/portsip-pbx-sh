@@ -46,14 +46,14 @@ services:
       - POSTGRES_PASSWORD=${pbx_db_password}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --auth=md5 --auth-host=md5 --data-checksums
       - POSTGRES_HOST_AUTH_METHOD=md5
-    restart: always
+    restart: on-failure:3
     healthcheck:
       test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "postgres" ]
       interval: 3s
       timeout: 1s
       retries: 10
       start_period: 3s
-   
+
   initdt:
     image: ${pbx_img}
     command: [ "/usr/local/bin/initdt.sh", "-D", "/var/lib/portsip/pbx", "--pg-superuser-name", "postgres",  "--pg-superuser-password", "${pbx_db_password}" ]
@@ -76,7 +76,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: always
+    restart: on-failure:3
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8222"]
       interval: 3s
@@ -103,7 +103,7 @@ services:
       - MIMALLOC_PAGE_RESET=1
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -126,7 +126,7 @@ services:
       - IP_ADDRESS=${pbx_ip_address}
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -144,7 +144,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -162,7 +162,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -182,7 +182,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -206,7 +206,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -230,7 +230,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -251,7 +251,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -276,7 +276,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -301,7 +301,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -326,7 +326,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -351,7 +351,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -376,7 +376,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: always
+    restart: on-failure:3
     depends_on:
       initdt:
         condition: service_completed_successfully
