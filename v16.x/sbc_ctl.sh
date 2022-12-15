@@ -90,7 +90,7 @@ EOF
         --restart=always \
         --cap-add=SYS_PTRACE \
         --network=host \
-        -v $data_path:/var/lib/portsip/sbc \
+        -v $data_path/sbc:/var/lib/portsip/sbc \
         -v /etc/localtime:/etc/localtime:ro  \
         $sbc_img
 
