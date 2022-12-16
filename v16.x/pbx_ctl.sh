@@ -36,7 +36,7 @@ services:
     image: ${pbx_db_img}
     network_mode: host
     user: root
-    container_name: "PortSIP.Database"
+    container_name: "portsip.database"
     volumes:
       - /etc/localtime:/etc/localtime
       - pbx-db:/var/lib/postgresql/data
@@ -59,7 +59,7 @@ services:
     command: [ "/usr/local/bin/initdt.sh", "-D", "/var/lib/portsip/pbx", "--pg-superuser-name", "postgres",  "--pg-superuser-password", "${pbx_db_password}" ]
     network_mode: host
     user: root
-    container_name: "PortSIP.Initdt"
+    container_name: "portsip.initdt"
     volumes:
       - /etc/localtime:/etc/localtime
       - pbx-data:/var/lib/portsip/pbx
@@ -72,7 +72,7 @@ services:
     command: ["/usr/local/bin/nats-server", "--log", "/var/lib/portsip/pbx/log/nats.log", "--http_port", "8222"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.NATS"
+    container_name: "portsip.nats"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -92,7 +92,7 @@ services:
     command: ["/usr/local/bin/callmanager", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.CallManager"
+    container_name: "portsip.callmanager"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -117,7 +117,7 @@ services:
     command: ["/usr/local/bin/mediaserver", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.MediaServer"
+    container_name: "portsip.mediaserver"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -140,7 +140,7 @@ services:
     command:  ["/usr/local/bin/apigate", "serve", "-D","/var/lib/portsip/pbx"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.Gateway"
+    container_name: "portsip.gateway"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -158,7 +158,7 @@ services:
     command: ["/usr/sbin/nginx", "-c", "/etc/nginx/nginx.conf"]
     network_mode: host
     #user: www-data
-    container_name: "PortSIP.WebServer"
+    container_name: "portsip.webserver"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -174,7 +174,7 @@ services:
     command: ["/usr/local/bin/wsspublisher", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.WSSPublisher"
+    container_name: "portsip.wsspublisher"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -198,7 +198,7 @@ services:
     command: ["/usr/local/bin/voicemail", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.Voicemail"
+    container_name: "portsip.voicemail"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -222,7 +222,7 @@ services:
     command: ["/usr/local/bin/vr", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.VirtualReceptionist"
+    container_name: "portsip.virtualreceptionist"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -247,7 +247,7 @@ services:
     command: ["/usr/local/bin/notifycenter", "-D","/var/lib/portsip/pbx"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.NotificationCenter"
+    container_name: "portsip.notificationcenter"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -268,7 +268,7 @@ services:
     command: ["/usr/local/bin/prvserver", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.Provision"
+    container_name: "portsip.provision"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -293,7 +293,7 @@ services:
     command: ["/usr/local/bin/conf", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.Conference"
+    container_name: "portsip.conference"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -318,7 +318,7 @@ services:
     command: ["/usr/local/bin/callqueue", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.CallQueue"
+    container_name: "portsip.callqueue"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -343,7 +343,7 @@ services:
     command: ["/usr/local/bin/callpark", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.CallPark"
+    container_name: "portsip.callpark"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -368,7 +368,7 @@ services:
     command: ["/usr/local/bin/anncmnt", "-D","/var/lib/portsip/pbx", "start"]
     network_mode: host
     user: portsip
-    container_name: "PortSIP.Announcement"
+    container_name: "portsip.announcement"
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime

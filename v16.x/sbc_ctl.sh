@@ -86,7 +86,7 @@ EOF
 
     # run sbc service
     docker run -d \
-        --name PortSIP.SBC \
+        --name portsip.sbc \
         --restart=always \
         --cap-add=SYS_PTRACE \
         --network=host \
@@ -121,12 +121,12 @@ status() {
         echo ""
         echo "status all services"
         echo ""
-        docker exec PortSIP.SBC supervisorctl status 
+        docker exec portsip.sbc supervisorctl status 
     else
         echo ""
         echo "status service $service_name"
         echo ""
-        docker exec PortSIP.SBC supervisorctl status $service_name
+        docker exec portsip.sbc supervisorctl status $service_name
     fi
 }
 
@@ -151,14 +151,14 @@ restart() {
         echo ""
         echo "restart all services"
         echo ""
-        docker restart -t 300 PortSIP.SBC
+        docker restart -t 300 portsip.sbc
         exit
     fi
 
     echo ""
     echo "restart service $service_name"
     echo ""
-    docker exec PortSIP.SBC supervisorctl restart $service_name
+    docker exec portsip.sbc supervisorctl restart $service_name
 }
 
 start() {
@@ -182,12 +182,12 @@ start() {
         echo ""
         echo "start all services"
         echo ""
-        docker start PortSIP.SBC
+        docker start portsip.sbc
     else
         echo ""
         echo "start service $service_name"
         echo ""
-        docker exec PortSIP.SBC supervisorctl start $service_name
+        docker exec portsip.sbc supervisorctl start $service_name
     fi
 }
 
@@ -212,21 +212,21 @@ stop() {
         echo ""
         echo "stop all services"
         echo ""
-        docker stop -t 300 PortSIP.SBC
+        docker stop -t 300 portsip.sbc
         exit
     fi
     echo ""
     echo "stop service $service_name"
     echo ""
-    docker exec PortSIP.SBC supervisorctl stop $service_name
+    docker exec portsip.sbc supervisorctl stop $service_name
 }
 
 rm() {
     # remove command firstly
     shift
 
-    docker stop -t 300 PortSIP.SBC
-    docker rm -f PortSIP.SBC
+    docker stop -t 300 portsip.sbc
+    docker rm -f portsip.sbc
 }
 
 case $1 in
