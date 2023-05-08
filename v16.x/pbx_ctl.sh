@@ -3,7 +3,7 @@ set -e
 
 if [ -z $1 ];
 then 
-    echo -e "\t => need parameters <="
+    echo "\t => need parameters <="
     exit -1
 fi
 
@@ -13,6 +13,44 @@ fi
 
 cd pbx
 
+export_pbx_production_version() {
+    local pbx_img=$1
+    local null_str=null
+    local labels=$(docker image inspect --format='{{json .Config.Labels}}' $pbx_img)
+    if [ -z "$labels" ]; then
+        return
+    elif [ $labels = $null_str ]; then
+        return
+    fi
+    cat << LEOF > labels.json
+$labels
+LEOF
+
+    grep -o '"version":"[^"]*' labels.json | grep -o '[^"]*$'
+}
+
+is_pbx_production_version_less_than_16_1() {
+    # x.y.z
+    local v=$1
+
+    set -f; IFS='.'
+    set -- $v
+    local x=$1; 
+    local y=$2; 
+    local z=$3
+    set +f; unset IFS
+
+    if [ $x -lt 16 ]; then
+        echo 1
+    elif [ $x -gt 16 ]; then
+        echo 0
+    elif [ $y -lt 1 ]; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
 # $1: pbx_data_path
 # $2: pbx_ip_address
 # $3: pbx_img
@@ -20,17 +58,33 @@ cd pbx
 # $5: pbx_db_password
 export_configure() {
     echo ""
-    echo -e "\t => export configure file 'docker-compose-portsip-pbx.yml' <="
+    echo "\t export configure file 'docker-compose-portsip-pbx.yml'"
     echo ""
 
-    pbx_data_path=$1
-    pbx_ip_address=$2
-    pbx_img=$3
-    pbx_db_img=$4
-    pbx_db_password=$5
+    local pbx_data_path=$1
+    local pbx_ip_address=$2
+    local pbx_img=$3
+    local pbx_db_img=$4
+    local pbx_db_password=$5
+    local pbx_product_version=$6
 
     cat << FEOF > docker-compose-portsip-pbx.yml
 version: "3.9"
+
+volumes:
+  pbx-db:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${pbx_data_path}/postgresql
+  pbx-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${pbx_data_path}/pbx
+
 services:
   database:
     image: ${pbx_db_img}
@@ -386,23 +440,40 @@ services:
         condition: service_healthy
       callmanager:
         condition: service_started
-
-volumes:
-  pbx-db:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${pbx_data_path}/postgresql
-  pbx-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${pbx_data_path}/pbx
 FEOF
+
+    # pbx >= 16.1
+    local ret=$(is_pbx_production_version_less_than_16_1 $pbx_product_version)
+    # ret: 1 for success and 0 for failure
+    if [ $ret -eq 0 ]; then
+      cat << NBEOF >> docker-compose-portsip-pbx.yml
+  # PortSIP loadbalancer
+  loadbalancer: 
+    image: ${pbx_img}
+    command: ["/usr/local/bin/loadbalancer", "-D","/var/lib/portsip/pbx"]
+    network_mode: host
+    user: portsip
+    container_name: "portsip.loadbalancer"
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+    environment:
+      - LD_LIBRARY_PATH=/usr/local/lib
+    cap_add:
+      - SYS_PTRACE
+    restart: unless-stopped
+    depends_on:
+      initdt:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+NBEOF
+    fi
+
     echo ""
-    echo -e "\t => configure file done <="
+    echo "\t configure file done"
     echo ""
     echo ""
 }
@@ -417,13 +488,13 @@ create() {
     # remove command firstly
     shift
 
-    data_path=
-    ip_address=
-    pbx_img=
-    db_listen_address=0.0.0.0
-    db_img="portsip/postgresql:14"
+    local data_path=
+    local ip_address=
+    local pbx_img=
+    local db_listen_address=0.0.0.0
+    local db_img="portsip/postgresql:14"
     #  generate db password
-    db_password=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20`
+    local db_password=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20`
     # parse parameters
     while getopts p:a:i:d: option
     do 
@@ -445,20 +516,20 @@ create() {
 
     # check parameters is exist
     if [ -z "$data_path" ]; then
-        echo -e "\t Option -p not specified"
+        echo "\t Option -p not specified"
         exit -1
     fi
     if [ -z "$ip_address" ]; then
-        echo -e "\t Option -a not specified"
+        echo "\t Option -a not specified"
         exit -1
     fi
     if [ -z "$pbx_img" ]; then
-        echo -e "\t Option -i not specified"
+        echo "\t Option -i not specified"
         exit -1
     fi
 
     if [ -z "$db_img" ]; then
-        echo -e "\t Option -d not specified"
+        echo "\t Option -d not specified"
         exit -1
     fi
 
@@ -467,27 +538,27 @@ create() {
         db_password=`sed -nr "/^\[database\]/ { :l /^superuser_password[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;}" $data_path/pbx/system.ini`
     fi
     if [ -z "$db_password" ]; then
-        echo -e "\t Password is empty"
+        echo "\t Password is empty"
         exit -1
     fi
 
-    echo -e "\t use datapath $data_path, ip $ip_address, img $pbx_img, db img $db_img"
+    echo "\t use datapath $data_path, ip $ip_address, img $pbx_img, db img $db_img"
     echo ""
 
     # check datapath whether exist
     if [ ! -d "$data_path/pbx" ]; then
-        echo -e "\t datapath $data_path/pbx not exist, try to reate it"
+        echo "\t datapath $data_path/pbx not exist, try to reate it"
         mkdir -p $data_path/pbx
-        echo -e "\t created"
+        echo "\t created"
         echo ""
     fi
 
     # check db datapath whether exist
     if [ ! -d "$data_path/postgresql" ]; then
         echo ""
-        echo -e "\t db datapath $data_path/postgresql not exist, try to reate it"
+        echo "\t db datapath $data_path/postgresql not exist, try to reate it"
         mkdir -p $data_path/postgresql
-        echo -e "\t created"
+        echo "\t created"
         echo ""
     fi
 
@@ -503,12 +574,21 @@ PBX_DB_IMG=$db_img
 DB_PASSWORD=$db_password
 EOF
 
-    export_configure $data_path $ip_address $pbx_img $db_img $db_password
+    # get product version
+    docker image pull $pbx_img
+    local version=$(export_pbx_production_version $pbx_img)
+    if [ -z "$version" ]; then
+        echo "\t not found label 'version', use default '16.0.1'"
+        version="16.0.1"
+    fi
+    echo "\t pbx version $version"
+
+    export_configure $data_path $ip_address $pbx_img $db_img $db_password $version
     # run pbx service
     docker compose -f docker-compose-portsip-pbx.yml up -d
 
     echo ""
-    echo -e "\t done"
+    echo "\t done"
     echo ""
 }
 
@@ -548,7 +628,7 @@ restart() {
     # remove command firstly
     shift
 
-    service_name=
+    local service_name=
 
     # parse parameters
     while getopts s: option
@@ -594,7 +674,7 @@ start() {
     # remove command firstly
     shift
 
-    service_name=
+    local service_name=
 
     # parse parameters
     while getopts s: option
@@ -624,7 +704,7 @@ stop() {
     # remove command firstly
     shift
 
-    service_name=
+    local service_name=
 
     # parse parameters
     while getopts s: option
@@ -710,7 +790,7 @@ rm)
     ;;
 
 *)
-    echo -e "\t error command"
+    echo "\t error command"
     ;;
 esac
 
