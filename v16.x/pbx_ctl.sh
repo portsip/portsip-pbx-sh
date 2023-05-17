@@ -3,7 +3,7 @@ set -e
 
 if [ -z $1 ];
 then 
-    echo "\t => need parameters <="
+    echo "=> need parameters <="
     exit -1
 fi
 
@@ -57,9 +57,8 @@ is_pbx_production_version_less_than_16_1() {
 # $4: pbx_db_img
 # $5: pbx_db_password
 export_configure() {
-    echo ""
-    echo "\t export configure file 'docker-compose-portsip-pbx.yml'"
-    echo ""
+    echo 
+    echo "export configure file 'docker-compose-portsip-pbx.yml'"
 
     local pbx_data_path=$1
     local pbx_ip_address=$2
@@ -472,9 +471,7 @@ FEOF
 NBEOF
     fi
 
-    echo ""
-    echo "\t configure file done"
-    echo ""
+    echo "done"
     echo ""
 }
 
@@ -542,23 +539,27 @@ create() {
         exit -1
     fi
 
-    echo "\t use datapath $data_path, ip $ip_address, img $pbx_img, db img $db_img"
+    echo ""
+    echo "datapath: $data_path"
+    echo "ip      : $ip_address"
+    echo "pbx  img: $pbx_img"
+    echo "db   img: $db_img"
     echo ""
 
     # check datapath whether exist
     if [ ! -d "$data_path/pbx" ]; then
-        echo "\t datapath $data_path/pbx not exist, try to reate it"
+        echo "datapath $data_path/pbx not exist, try to create it"
         mkdir -p $data_path/pbx
-        echo "\t created"
+        echo "created"
         echo ""
     fi
 
     # check db datapath whether exist
     if [ ! -d "$data_path/postgresql" ]; then
         echo ""
-        echo "\t db datapath $data_path/postgresql not exist, try to reate it"
+        echo "db datapath $data_path/postgresql not exist, try to create it"
         mkdir -p $data_path/postgresql
-        echo "\t created"
+        echo "created"
         echo ""
     fi
 
@@ -578,17 +579,17 @@ EOF
     docker image pull $pbx_img
     local version=$(export_pbx_production_version $pbx_img)
     if [ -z "$version" ]; then
-        echo "\t not found label 'version', use default '16.0.1'"
+        echo "not found label 'version' in pbx docker image, just use default '16.0.1'"
         version="16.0.1"
     fi
-    echo "\t pbx version $version"
+    echo "pbx version $version"
 
     export_configure $data_path $ip_address $pbx_img $db_img $db_password $version
     # run pbx service
     docker compose -f docker-compose-portsip-pbx.yml up -d
 
     echo ""
-    echo "\t done"
+    echo "done"
     echo ""
 }
 
