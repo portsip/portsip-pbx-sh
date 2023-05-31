@@ -468,6 +468,28 @@ FEOF
         condition: service_healthy
       database:
         condition: service_healthy
+
+  # PortSIP PortSIP Cert Manager
+  certmanager:
+    image: ${pbx_img}
+    command: ["/usr/local/bin/certmanager", "-D","/var/lib/portsip/pbx"]
+    network_mode: host
+    user: root
+    container_name: "portsip.certmanager"
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+      - /etc/docker:/etc/docker
+      - /usr/bin/docker:/usr/bin/docker
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    depends_on:
+      initdt:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
 NBEOF
     fi
 
