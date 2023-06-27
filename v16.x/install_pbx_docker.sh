@@ -20,7 +20,7 @@ set_firewall(){
     firewall-cmd --reload
     firewall-cmd --permanent --add-service=ssh
     firewall-cmd --permanent --new-service=portsip-pbx || true
-    firewall-cmd --permanent --service=portsip-pbx --add-port=8887-8888/tcp --add-port=8885/tcp --add-port=4222/tcp --add-port=80/tcp --add-port=443/tcp --set-description="PortSIP PBX"
+    firewall-cmd --permanent --service=portsip-pbx --add-port=8887-8889/tcp --add-port=8885/tcp --add-port=4222/tcp --add-port=80/tcp --add-port=443/tcp --set-description="PortSIP PBX"
     firewall-cmd --permanent --service=portsip-pbx --add-port=5060/udp --add-port=5061/tcp --add-port=5063/tcp --add-port=45000-65000/udp --set-description="PortSIP PBX"
     firewall-cmd --permanent --add-service=portsip-pbx
     firewall-cmd --reload

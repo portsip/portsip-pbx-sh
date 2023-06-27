@@ -469,7 +469,7 @@ FEOF
       database:
         condition: service_healthy
 
-  # PortSIP PortSIP Cert Manager
+  # PortSIP Cert Manager
   certmanager:
     image: ${pbx_img}
     command: ["/usr/local/bin/certmanager", "-D","/var/lib/portsip/pbx"]
@@ -490,6 +490,31 @@ FEOF
         condition: service_healthy
       database:
         condition: service_healthy
+
+  # PortSIP Data Board
+  databoard: 
+    image: ${pbx_img}
+    command: ["node", "server.js"]
+    ports:
+      - "8889:3000"
+    user: portsip
+    container_name: "portsip.databoard"
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+    working_dir: /usr/share/nginx/html/queue-wallboard
+    cap_add:
+      - SYS_PTRACE
+    restart: unless-stopped
+    depends_on:
+      initdt:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+      callmanager:
+        condition: service_started
 NBEOF
     fi
 
