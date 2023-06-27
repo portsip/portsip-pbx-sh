@@ -495,8 +495,9 @@ FEOF
   databoard: 
     image: ${pbx_img}
     command: ["node", "server.js"]
-    ports:
-      - "8889:3000"
+    network_mode: host
+    environment:
+      - PORT=8889
     user: portsip
     container_name: "portsip.databoard"
     volumes:
