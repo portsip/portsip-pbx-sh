@@ -503,7 +503,7 @@ FEOF
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    working_dir: /usr/share/nginx/html/queue-wallboard
+    working_dir: /usr/share/nginx/html/databoard
     cap_add:
       - SYS_PTRACE
     restart: unless-stopped
