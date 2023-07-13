@@ -627,7 +627,7 @@ EOF
     docker image pull $pbx_img
     local version=$(export_pbx_production_version $pbx_img)
     if [ -z "$version" ]; then
-        echo "not found label 'version' in pbx docker image, just use default '16.0.1'"
+        echo "not found label 'version' in pbx docker image, just use default '16.0'"
         version="16.0.1"
     fi
     echo "pbx version $version"
