@@ -494,7 +494,7 @@ FEOF
   # PortSIP Data Board
   databoard: 
     image: ${pbx_img}
-    command: ["node", "server.js"]
+    command: ["node", "server.js", "/var/lib/portsip/pbx"]
     network_mode: host
     environment:
       - PORT=8889
