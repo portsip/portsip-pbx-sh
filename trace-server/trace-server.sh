@@ -1,5 +1,7 @@
 #!/bin/bash
 
+data_drop_days=5
+
 init(){
     # disable firewall
     systemctl stop firewalld.service || true
@@ -15,6 +17,21 @@ init(){
     #sed -i 's#SELINUX=enforcing#SELINUX=disabled#g' /etc/selinux/config || true
     #sed -i 's#SELINUX=permissive#SELINUX=disabled#g' /etc/selinux/config || true
     #echo "disabled selinux"
+}
+
+parse_cmd_parameters() {
+    echo "args:$@"
+
+    shift
+    
+    while getopts k: option
+    do 
+        case "${option}" in
+            k)
+                data_drop_days=${OPTARG}
+                ;;
+        esac
+    done
 }
 
 generate_svc_config(){
@@ -49,7 +66,7 @@ services:
       - "HEPLIFYSERVER_DBDATATABLE=homer_data"
       - "HEPLIFYSERVER_DBCONFTABLE=homer_config"
       - "HEPLIFYSERVER_DBROTATE=true"
-      - "HEPLIFYSERVER_DBDROPDAYS=3"
+      - "HEPLIFYSERVER_DBDROPDAYS=${data_drop_days}"
       - "HEPLIFYSERVER_LOGLVL=info"
       - "HEPLIFYSERVER_LOGSTD=true"
       - "HEPLIFYSERVER_DEDUP=false"
@@ -83,7 +100,6 @@ services:
   trace-db:
     container_name: trace-db
     image: portsip/trace-server:postgres11-alpine
-    restart: always
     environment:
       POSTGRES_PASSWORD: homerSeven
       POSTGRES_USER: root
@@ -100,100 +116,107 @@ services:
 EOL
 }
 
-# install docker
+# install docker and docker compose plugin
 install_docker_on_centos(){
     echo ""
-    cat /etc/redhat-release
+    echo "====>Starting to install on centos"
     echo ""
+    yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
     yum install -y yum-utils device-mapper-persistent-data lvm2
-    yum-config-manager --add-repo  https://download.docker.com/linux/centos/docker-ce.repo
-    yum install -y docker-ce docker-ce-cli containerd.io
-    systemctl start docker
-    systemctl enable docker || exit -1
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    
+    yum makecache fast
     echo ""
-    docker --version
+    echo "====>Try to install docker"
     echo ""
-}
-install_docker_on_ubuntu(){
-    echo ""
-    cat /etc/lsb-release
-    echo ""
-    dpkg --configure -a
-    apt-get remove -y docker docker-engine docker.io containerd runc
-    apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update -y
-    apt-get install docker-ce docker-ce-cli containerd.io -y
+    yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     systemctl enable docker
-    systemctl start docker || exit -1
+    #systemctl stop docker
     echo ""
-    docker --version
-    echo ""
-}
-install_docker_on_debian(){
-    echo ""
-    cat /etc/lsb-release
-    echo ""
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update -y
-    apt-get install docker-ce docker-ce-cli containerd.io -y
-    systemctl enable docker
-    systemctl stop docker
-    systemctl start docker
-    echo ""
-    docker --version
+    echo "====>Successfully to install the docker"
     echo ""
 }
 
-install_docker_compose(){
-    curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+# install docker and docker compose plugin
+install_docker_on_ubuntu(){
     echo ""
-    docker-compose --version || exit -1
+    echo "====>Starting to install on ubuntu"
+    echo ""
+    echo "====>Try to update system"
+    echo ""
+    apt-get remove -y  docker docker-engine docker.io containerd runc || true
+    apt update -y
+    dpkg --configure -a || true
+    DEBIAN_FRONTEND=noninteractive apt upgrade -y || true
+    echo ""
+    echo "====>System updated"
+    echo ""
+    DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg gnupg-agent software-properties-common lsb-release
+    echo ""
+    mkdir -p /etc/apt/keyrings
+    rm -f /etc/apt/keyrings/docker.gpg || true
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get update -y 
+    echo ""
+    echo "====>Try to install the docker"
+    echo ""
+    DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-compose-plugin -y
+    systemctl enable docker
+    #systemctl stop docker
+    echo ""
+    echo "====Successfully to install the docker"
+    echo ""
+}
+
+# install docker and docker compose plugin
+install_docker_on_debian(){
+    echo ""
+    echo "====>Starting to install on debian"
+    echo ""
+    echo "====>Try to update system"
+    echo ""
+    apt-get remove docker docker-engine docker.io containerd runc || true
+    apt update -y 
+    apt upgrade -y
+    echo ""
+    echo "====>System updated"
+
+    echo ""
+    apt-get install apt-transport-https ca-certificates curl gnupg lsb-release -y
+    echo ""
+
+    echo "====>Try to install docker"
+    echo ""
+    rm -f /usr/share/keyrings/docker-archive-keyring.gpg
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    apt-get update -y
+    apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
+    systemctl enable docker
+    #systemctl stop docker
+    echo ""
+    echo "====>Successfully to install the docker"
     echo ""
 }
 
 install(){
     # disable firewall&selinux
     init
-
-    # install docker
-    which docker
-    if [ "$?" -ne 0 ]; then
-        echo "try to install docker"
-        if [  -f "/etc/redhat-release" ];then
-            install_docker_on_centos
-        elif [ -f "/etc/lsb-release" ];then
-            install_docker_on_ubuntu
-        elif [ -f "/etc/debian_version" ];then
-            install_docker_on_debian
-        else
-            echo "os not support"
-            exit -1
-        fi
-        echo "succeed to install docker"
+    echo "try to install docker"
+    if [  -f "/etc/redhat-release" ];then
+        install_docker_on_centos
+    elif [ -f "/etc/lsb-release" ];then
+        install_docker_on_ubuntu
+    elif [ -f "/etc/debian_version" ];then
+        install_docker_on_debian
     else
-        echo "use existing docker"
-        echo ""
-        docker --version
-        echo ""
+        echo "os not support"
+        exit -1
     fi
+    echo "succeed to install docker"
+
     systemctl restart docker
-
-    # install docker compose
-    which docker-compose
-    if [ "$?" -ne 0 ]; then
-        echo "try to install docker compose"
-        install_docker_compose
-        echo "succeed to install docker compose"
-    else
-        echo "use existing docker-compose"
-        echo ""
-        docker-compose --version
-        echo ""
-    fi
 }
 
 start(){
@@ -202,7 +225,7 @@ start(){
     echo "try to start trace server"
     systemctl start docker || exit -1
     echo ""
-    docker-compose up -d || exit -1
+    docker compose up -d || exit -1
     echo ""
     echo "succeed to start trace server"
 }
@@ -212,7 +235,7 @@ stop(){
     generate_svc_config
     echo "try to stop trace server"
     echo ""
-    docker-compose stop
+    docker compose stop
     echo ""
     echo "succeed to stop trace server"
 }
@@ -220,7 +243,7 @@ stop(){
 remove(){
     stop
     echo ""
-    docker-compose rm -f || true
+    docker compose rm -f || true
     echo ""
     echo "succed to remove trace server containers"
     rm -rf ./postgres-data
@@ -229,6 +252,7 @@ remove(){
 
 case $1 in
     start)
+        parse_cmd_parameters $@
         install
         start
         ;;
@@ -236,6 +260,9 @@ case $1 in
         stop
         ;;
     remove)
+        remove
+        ;;
+    rm)
         remove
         ;;
     *)

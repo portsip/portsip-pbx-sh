@@ -3,7 +3,7 @@
 ## 启动
 
 ```
-/bin/sh trace-server.sh start
+/bin/sh trace-server.sh start [-k <data drop days>]
 ```
 
 ## 停止
@@ -15,5 +15,5 @@
 ## 删除
 
 ```
-/bin/sh trace-server.sh remove
+/bin/sh trace-server.sh rm
 ```
