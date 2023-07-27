@@ -694,7 +694,9 @@ restart() {
         echo ""
         echo "restart all services"
         echo ""
-        docker compose -f docker-compose-portsip-pbx.yml restart
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300
+        sleep 10
+        docker compose -f docker-compose-portsip-pbx.yml start
         exit 0
     fi
 
@@ -703,17 +705,20 @@ restart() {
     echo ""
     case $service_name in
     database)
-        docker compose -f docker-compose-portsip-pbx.yml stop -t 100
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300
+        sleep 10
         docker compose -f docker-compose-portsip-pbx.yml start
         ;;
 
     nats)
-        docker compose -f docker-compose-portsip-pbx.yml stop -t 100
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300
+        sleep 10
         docker compose -f docker-compose-portsip-pbx.yml start
         ;;
 
     *)
-        docker compose -f docker-compose-portsip-pbx.yml stop -t 100 $service_name
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300 $service_name
+        sleep 1
         docker compose -f docker-compose-portsip-pbx.yml start $service_name
         ;;
     esac
