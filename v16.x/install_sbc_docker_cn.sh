@@ -16,8 +16,8 @@ set_firewall(){
     echo ""
     echo "====>Configure SBC's default firewall rules"
     echo ""
-    firewall-cmd --zone=trusted --remove-interface=docker0 --permanent
-    firewall-cmd --permanent --remove-service=portsip-sbc || true
+    firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
+    firewall-cmd -q --permanent --delete-service=portsip-sbc || true
     firewall-cmd --reload
     firewall-cmd --permanent --add-service=ssh
     firewall-cmd --permanent --new-service=portsip-sbc || true
