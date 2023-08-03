@@ -51,6 +51,89 @@ is_pbx_production_version_less_than_16_1() {
     fi
 }
 
+svc_name() {
+    case $1 in
+    portsip.database)
+        echo "database"
+        ;;
+
+    portsip.initdt)
+        echo "initdt"
+        ;;
+
+    portsip.nats)
+        echo "nats"
+        ;;
+
+    portsip.callmanager)
+        echo "callmanager"
+        ;;
+
+    portsip.mediaserver)
+        echo "mediaserver"
+        ;;
+
+    portsip.gateway)
+        echo "gateway"
+        ;;
+
+    portsip.webserver)
+        echo "websvc"
+        ;;
+
+    portsip.wsspublisher)
+        echo "wsspublisher"
+        ;;
+
+    portsip.voicemail)
+        echo "voicemail"
+        ;;
+
+    portsip.virtualreceptionist)
+        echo "vr"
+        ;;
+
+    portsip.notificationcenter)
+        echo "notifycenter"
+        ;;
+
+    portsip.provision)
+        echo "prvserver"
+        ;;
+
+    portsip.conference)
+        echo "conf"
+        ;;
+
+    portsip.callqueue)
+        echo "callqueue"
+        ;;
+
+    portsip.callpark)
+        echo "callpark"
+        ;;
+
+    portsip.announcement)
+        echo "anncmnt"
+        ;;
+
+    portsip.loadbalancer)
+        echo "loadbalancer"
+        ;;
+
+    portsip.certmanager)
+        echo "certmanager"
+        ;;
+
+    portsip.databoard)
+        echo "databoard"
+        ;;
+    *)
+        echo $1
+        ;;
+    esac
+}
+
 # $1: pbx_data_path
 # $2: pbx_ip_address
 # $3: pbx_img
@@ -666,6 +749,7 @@ status() {
         docker compose -f docker-compose-portsip-pbx.yml ls -a
         docker compose -f docker-compose-portsip-pbx.yml ps -a
     else
+        service_name=$(svc_name $service_name)
         echo ""
         echo "status service $service_name"
         echo ""
@@ -700,6 +784,7 @@ restart() {
         exit 0
     fi
 
+    service_name=$(svc_name $service_name)
     echo ""
     echo "restart service $service_name"
     echo ""
@@ -747,6 +832,7 @@ start() {
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml start
     else
+        service_name=$(svc_name $service_name)
         echo ""
         echo "start service $service_name"
         echo ""
@@ -778,6 +864,7 @@ stop() {
         docker compose -f docker-compose-portsip-pbx.yml stop
         exit 0
     fi
+    service_name=$(svc_name $service_name)
     echo ""
     echo "stop service $service_name"
     echo ""
