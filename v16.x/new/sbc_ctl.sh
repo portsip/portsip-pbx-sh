@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+firewall_svc_name="portsip-sbc"
+
 create_help() {
     echo
     echo  "\t command run options:"
@@ -28,25 +30,15 @@ then
 fi
 
 set_firewall(){
-    echo ""
-    echo "====>Stop the ufw"
-    echo ""
+    echo "Configure firewall rules"
     systemctl stop ufw || true
     systemctl disable ufw  || true
-    echo ""
-    echo "====>Enable the firewalld"
-    echo ""
     systemctl enable firewalld
     systemctl start firewalld
-    echo ""
-    echo "====>Configure SBC's default firewall rules"
-    echo ""
-    local firewall_svc_name=portsip-sbc
-    local ports=$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)
+    local pre_svc_exist=false
+    local ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
     if [ $? -eq 0 ]; then
-        # firewall already configured
-        firewall-cmd --reload
-        return
+        pre_svc_exist=true
     fi
     firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
     firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
@@ -54,12 +46,16 @@ set_firewall(){
     firewall-cmd --permanent --add-service=ssh
     firewall-cmd --permanent --new-service=${firewall_svc_name} || true
     firewall-cmd --permanent --service=${firewall_svc_name} --add-port=25000-35000/udp --add-port=5066/udp --add-port=5065/tcp --add-port=5067/tcp --add-port=5069/tcp --add-port=8882/tcp --add-port=8883/tcp --add-port=10443/tcp --set-description="PortSIP SBC"
+    if [ "$pre_svc_exist" = true ] ; then
+        for port_rule in $ports
+        do
+            firewall-cmd --permanent --service=${firewall_svc_name} --add-port=$port_rule
+        done
+    fi
     firewall-cmd --permanent --add-service=${firewall_svc_name}
     firewall-cmd --reload
     systemctl restart firewalld
-    echo ""
-    echo "====>Firewalld configure done"
-    echo ""
+    echo "done"
 }
 
 create() {
@@ -262,6 +258,8 @@ rm() {
     # remove command firstly
     shift
 
+    #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
+    #firewall-cmd --reload
     docker stop -t 300 portsip.sbc
     docker rm -f portsip.sbc
 }

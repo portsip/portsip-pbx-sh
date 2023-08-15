@@ -67,15 +67,15 @@ install_docker_on_debian(){
     echo "====>Try to update system"
     echo ""
     apt-get remove docker docker-engine docker.io containerd runc || true
-    apt update -y 
-    apt upgrade -y
+    DEBIAN_FRONTEND=noninteractive apt update -y 
+    DEBIAN_FRONTEND=noninteractive apt upgrade -y
     echo ""
     echo "====>System updated"
 
     echo ""
     echo "====>Try to install the firewalld"
     echo ""
-    apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld -y
+    DEBIAN_FRONTEND=noninteractive apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld -y
     systemctl stop firewalld
     echo ""
     echo "====>Firewalld installed"
@@ -86,8 +86,8 @@ install_docker_on_debian(){
     rm -f /usr/share/keyrings/docker-archive-keyring.gpg
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update -y
-    apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
+    DEBIAN_FRONTEND=noninteractive apt-get update -y
+    DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
     systemctl enable docker
     #systemctl stop docker
     echo ""

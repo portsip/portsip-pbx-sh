@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+firewall_svc_name="portsip-pbx"
+
 if [ -z $1 ];
 then 
     echo "=> need parameters <="
@@ -15,37 +17,34 @@ cd pbx
 
 set_firewall(){
     echo ""
-    echo "====>Stop the ufw"
-    echo ""
+    echo "Configure firewall rules:"
     systemctl stop ufw || true
     systemctl disable ufw  || true
-    echo ""
-    echo "====>Enable the firewalld"
-    echo ""
     systemctl enable firewalld
     systemctl start firewalld
-    echo ""
-    echo "====>Configure PBX's default firewall rules"
-    echo ""
-    local ports=$(firewall-cmd --permanent --service=portsip-pbx --get-ports)
+    local pre_svc_exist=false
+    local ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
     if [ $? -eq 0 ]; then
-        # firewall already configured
-        firewall-cmd --reload
-        return
+        pre_svc_exist=true
     fi
     firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
-    firewall-cmd -q --permanent --delete-service=portsip-pbx || true
+
+    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
     firewall-cmd --reload
     firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=portsip-pbx || true
-    firewall-cmd --permanent --service=portsip-pbx --add-port=8887-8889/tcp --add-port=8885/tcp --add-port=4222/tcp --add-port=80/tcp --add-port=443/tcp --set-description="PortSIP PBX"
-    firewall-cmd --permanent --service=portsip-pbx --add-port=5060/udp --add-port=5061/tcp --add-port=5063/tcp --add-port=45000-65000/udp --set-description="PortSIP PBX"
-    firewall-cmd --permanent --add-service=portsip-pbx
+    firewall-cmd --permanent --new-service=${firewall_svc_name} || true
+    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=8887-8889/tcp --add-port=8885/tcp --add-port=4222/tcp --add-port=80/tcp --add-port=443/tcp
+    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=5060/udp --add-port=5061/tcp --add-port=5063/tcp --add-port=45000-65000/udp
+    if [ "$pre_svc_exist" = true ] ; then
+        for port_rule in $ports
+        do
+            firewall-cmd --permanent --service=${firewall_svc_name} --add-port=$port_rule
+        done
+    fi
+    firewall-cmd --permanent --add-service=${firewall_svc_name}
     firewall-cmd --reload
     systemctl restart firewalld
-    echo ""
-    echo "====>Firewalld configure done"
-    echo ""
+    echo "done"
 }
 
 export_pbx_production_version() {
@@ -935,6 +934,9 @@ rm() {
     #             ;;
     #     esac
     # done
+
+    #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
+    #firewall-cmd --reload
 
     docker compose -f docker-compose-portsip-pbx.yml down
 
