@@ -325,7 +325,7 @@ services:
 
   websvc: 
     image: ${pbx_img}
-    command: ["/usr/sbin/nginx", "-c", "/etc/nginx/nginx.conf"]
+    command: ["/usr/local/bin/websrv", "serve", "-n", "websrv", "-D","/var/lib/portsip/pbx"]
     network_mode: host
     #user: www-data
     container_name: "portsip.webserver"
