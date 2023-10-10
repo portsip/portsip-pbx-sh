@@ -184,6 +184,15 @@ export_configure() {
     local pbx_db_password=$5
     local pbx_product_version=$6
 
+    local webserver_command="\"/usr/sbin/nginx\", \"-c\", \"/etc/nginx/nginx.conf\""
+
+    # pbx >= 16.1
+    local ret=$(is_pbx_production_version_less_than_16_1 $pbx_product_version)
+    # ret: 1 for success and 0 for failure
+    if [ $ret -eq 0 ]; then
+        webserver_command="\"/usr/local/bin/websrv\", \"serve\", \"-n\", \"websrv\", \"-D\",\"/var/lib/portsip/pbx\""
+    fi
+
     cat << FEOF > docker-compose-portsip-pbx.yml
 version: "3.9"
 
@@ -325,7 +334,7 @@ services:
 
   websvc: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/websrv", "serve", "-n", "websrv", "-D","/var/lib/portsip/pbx"]
+    command: [${webserver_command}]
     network_mode: host
     #user: www-data
     container_name: "portsip.webserver"
@@ -336,6 +345,8 @@ services:
     depends_on:
       initdt:
         condition: service_completed_successfully
+      nats:
+        condition: service_healthy
       gateway:
         condition: service_started
 
@@ -558,9 +569,6 @@ services:
         condition: service_started
 FEOF
 
-    # pbx >= 16.1
-    local ret=$(is_pbx_production_version_less_than_16_1 $pbx_product_version)
-    # ret: 1 for success and 0 for failure
     if [ $ret -eq 0 ]; then
       cat << NBEOF >> docker-compose-portsip-pbx.yml
   # PortSIP loadbalancer
