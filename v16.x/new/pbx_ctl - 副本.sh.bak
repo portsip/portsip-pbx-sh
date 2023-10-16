@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-firewall_svc_name="portsip-pbx"
-
 if [ -z $1 ];
 then 
     echo "=> need parameters <="
@@ -14,38 +12,6 @@ if [ ! -d "./pbx" ]; then
 fi
 
 cd pbx
-
-set_firewall(){
-    echo ""
-    echo "Configure firewall rules:"
-    systemctl stop ufw || true
-    systemctl disable ufw  || true
-    systemctl enable firewalld
-    systemctl start firewalld
-    local pre_svc_exist=false
-    local ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
-    if [ $? -eq 0 ]; then
-        pre_svc_exist=true
-    fi
-    firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
-
-    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
-    firewall-cmd --reload
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=${firewall_svc_name} || true
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=8887-8889/tcp --add-port=8885/tcp --add-port=4222/tcp --add-port=80/tcp --add-port=443/tcp
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=5060/udp --add-port=5061/tcp --add-port=5063/tcp --add-port=45000-65000/udp
-    if [ "$pre_svc_exist" = true ] ; then
-        for port_rule in $ports
-        do
-            firewall-cmd --permanent --service=${firewall_svc_name} --add-port=$port_rule
-        done
-    fi
-    firewall-cmd --permanent --add-service=${firewall_svc_name}
-    firewall-cmd --reload
-    systemctl restart firewalld
-    echo "done"
-}
 
 export_pbx_production_version() {
     local pbx_img=$1
@@ -155,6 +121,10 @@ svc_name() {
         echo "loadbalancer"
         ;;
 
+    portsip.certmanager)
+        echo "certmanager"
+        ;;
+
     portsip.databoard)
         echo "databoard"
         ;;
@@ -221,7 +191,7 @@ services:
       - POSTGRES_PASSWORD=${pbx_db_password}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --auth=md5 --auth-host=md5 --data-checksums
       - POSTGRES_HOST_AUTH_METHOD=md5
-    restart: unless-stopped
+    restart: no
     healthcheck:
       test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "postgres" ]
       interval: 3s
@@ -251,7 +221,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: unless-stopped
+    restart: no
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8222"]
       interval: 3s
@@ -278,7 +248,7 @@ services:
       - MIMALLOC_PAGE_RESET=1
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -301,7 +271,7 @@ services:
       - IP_ADDRESS=${pbx_ip_address}
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -319,7 +289,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -337,7 +307,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -359,7 +329,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -383,7 +353,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -407,7 +377,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -428,7 +398,7 @@ services:
     volumes:
       - pbx-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -453,7 +423,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -478,7 +448,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -503,7 +473,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -528,7 +498,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -553,7 +523,7 @@ services:
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -565,6 +535,9 @@ services:
         condition: service_started
 FEOF
 
+    # pbx >= 16.1
+    local ret=$(is_pbx_production_version_less_than_16_1 $pbx_product_version)
+    # ret: 1 for success and 0 for failure
     if [ $ret -eq 0 ]; then
       cat << NBEOF >> docker-compose-portsip-pbx.yml
   # PortSIP loadbalancer
@@ -581,7 +554,29 @@ FEOF
       - LD_LIBRARY_PATH=/usr/local/lib
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
+    depends_on:
+      initdt:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+
+  # PortSIP Cert Manager
+  certmanager:
+    image: ${pbx_img}
+    command: ["/usr/local/bin/certmanager", "-D","/var/lib/portsip/pbx"]
+    network_mode: host
+    user: root
+    container_name: "portsip.certmanager"
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+      - /etc/docker:/etc/docker
+      - /usr/bin/docker:/usr/bin/docker
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -605,7 +600,7 @@ FEOF
     working_dir: /usr/share/nginx/html/databoard
     cap_add:
       - SYS_PTRACE
-    restart: unless-stopped
+    restart: no
     depends_on:
       initdt:
         condition: service_completed_successfully
@@ -628,8 +623,6 @@ create() {
     echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
-
-    set_firewall
 
     # remove command firstly
     shift
@@ -917,9 +910,6 @@ rm() {
     #     esac
     # done
 
-    #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
-    #firewall-cmd --reload
-
     docker compose -f docker-compose-portsip-pbx.yml down
 
     docker volume rm `docker volume ls  -q | grep pbx-data` || true
@@ -955,4 +945,3 @@ rm)
     echo "\t error command"
     ;;
 esac
-

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-firewall_svc_name="portsip-pbx"
-
 if [ -z $1 ];
 then 
     echo "=> need parameters <="
@@ -14,38 +12,6 @@ if [ ! -d "./pbx" ]; then
 fi
 
 cd pbx
-
-set_firewall(){
-    echo ""
-    echo "Configure firewall rules:"
-    systemctl stop ufw || true
-    systemctl disable ufw  || true
-    systemctl enable firewalld
-    systemctl start firewalld
-    local pre_svc_exist=false
-    local ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
-    if [ $? -eq 0 ]; then
-        pre_svc_exist=true
-    fi
-    firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
-
-    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
-    firewall-cmd --reload
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=${firewall_svc_name} || true
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=8887-8889/tcp --add-port=8885/tcp --add-port=4222/tcp --add-port=80/tcp --add-port=443/tcp
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=5060/udp --add-port=5061/tcp --add-port=5063/tcp --add-port=45000-65000/udp
-    if [ "$pre_svc_exist" = true ] ; then
-        for port_rule in $ports
-        do
-            firewall-cmd --permanent --service=${firewall_svc_name} --add-port=$port_rule
-        done
-    fi
-    firewall-cmd --permanent --add-service=${firewall_svc_name}
-    firewall-cmd --reload
-    systemctl restart firewalld
-    echo "done"
-}
 
 export_pbx_production_version() {
     local pbx_img=$1
@@ -85,85 +51,6 @@ is_pbx_production_version_less_than_16_1() {
     fi
 }
 
-svc_name() {
-    case $1 in
-    portsip.database)
-        echo "database"
-        ;;
-
-    portsip.initdt)
-        echo "initdt"
-        ;;
-
-    portsip.nats)
-        echo "nats"
-        ;;
-
-    portsip.callmanager)
-        echo "callmanager"
-        ;;
-
-    portsip.mediaserver)
-        echo "mediaserver"
-        ;;
-
-    portsip.gateway)
-        echo "gateway"
-        ;;
-
-    portsip.webserver)
-        echo "websvc"
-        ;;
-
-    portsip.wsspublisher)
-        echo "wsspublisher"
-        ;;
-
-    portsip.voicemail)
-        echo "voicemail"
-        ;;
-
-    portsip.virtualreceptionist)
-        echo "vr"
-        ;;
-
-    portsip.notificationcenter)
-        echo "notifycenter"
-        ;;
-
-    portsip.provision)
-        echo "prvserver"
-        ;;
-
-    portsip.conference)
-        echo "conf"
-        ;;
-
-    portsip.callqueue)
-        echo "callqueue"
-        ;;
-
-    portsip.callpark)
-        echo "callpark"
-        ;;
-
-    portsip.announcement)
-        echo "anncmnt"
-        ;;
-
-    portsip.loadbalancer)
-        echo "loadbalancer"
-        ;;
-
-    portsip.databoard)
-        echo "databoard"
-        ;;
-    *)
-        echo $1
-        ;;
-    esac
-}
-
 # $1: pbx_data_path
 # $2: pbx_ip_address
 # $3: pbx_img
@@ -179,14 +66,47 @@ export_configure() {
     local pbx_db_img=$4
     local pbx_db_password=$5
     local pbx_product_version=$6
-
-    local webserver_command="\"/usr/sbin/nginx\", \"-c\", \"/etc/nginx/nginx.conf\""
-
-    # pbx >= 16.1
-    local ret=$(is_pbx_production_version_less_than_16_1 $pbx_product_version)
-    # ret: 1 for success and 0 for failure
-    if [ $ret -eq 0 ]; then
-        webserver_command="\"/usr/local/bin/websrv\", \"serve\", \"-n\", \"websrv\", \"-D\",\"/var/lib/portsip/pbx\""
+    local less_than_16_1=$(is_pbx_production_version_less_than_16_1 $pbx_product_version)
+    if [ $less_than_16_1 -eq 0 ]; then
+        # pbx >= 16.1
+        cmd_initdt="[\"/usr/local/bin/initdt.sh\", \"-D\", \"/var/lib/portsip/pbx\", \"--pg-superuser-name\", \"postgres\",  \"--pg-superuser-password\", \"${pbx_db_password}\"]"
+        cmd_nats="[\"/usr/local/bin/nats-server\", \"--log\", \"/var/lib/portsip/pbx/log/nats.log\", \"--http_port\", \"8222\"]"
+        cmd_callmanager="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/callmanager\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_mediaserver="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/mediaserver\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_gateway="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/apigate\", \"serve\", \"-D\",\"/var/lib/portsip/pbx\"]"
+        cmd_websvc="[\"/usr/sbin/nginx\", \"-c\", \"/etc/nginx/nginx.conf\"]"
+        cmd_wsspublisher="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/wsspublisher\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_voicemail="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/voicemail\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_vr="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/vr\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_notifycenter="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/notifycenter\", \"-D\",\"/var/lib/portsip/pbx\"]"
+        cmd_prvserver="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/prvserver\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_conf="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/conf\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_callqueue="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/callqueue\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_callpark="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/callpark\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_anncmnt="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/anncmnt\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_loadbalancer="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/loadbalancer\", \"-D\",\"/var/lib/portsip/pbx\"]"
+        cmd_certmanager="[\"/usr/local/bin/run.sh\", \"/usr/local/bin/certmanager\", \"-D\",\"/var/lib/portsip/pbx\"]"
+        cmd_databoard="[\"/usr/local/bin/run.sh\", \"node\", \"server.js\", \"/var/lib/portsip/pbx\"]"
+    else
+        # pbx < 16.1
+        cmd_initdt="[\"/usr/local/bin/initdt.sh\", \"-D\", \"/var/lib/portsip/pbx\", \"--pg-superuser-name\", \"postgres\",  \"--pg-superuser-password\", \"${pbx_db_password}\"]"
+        cmd_nats="[\"/usr/local/bin/nats-server\", \"--log\", \"/var/lib/portsip/pbx/log/nats.log\", \"--http_port\", \"8222\"]"
+        cmd_callmanager="[\"/usr/local/bin/callmanager\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_mediaserver="[\"/usr/local/bin/mediaserver\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_gateway="[\"/usr/local/bin/apigate\", \"serve\", \"-D\",\"/var/lib/portsip/pbx\"]"
+        cmd_websvc="[\"/usr/sbin/nginx\", \"-c\", \"/etc/nginx/nginx.conf\"]"
+        cmd_wsspublisher="[\"/usr/local/bin/wsspublisher\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_voicemail="[\"/usr/local/bin/voicemail\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_vr="[\"/usr/local/bin/vr\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_notifycenter="[\"/usr/local/bin/notifycenter\", \"-D\",\"/var/lib/portsip/pbx\"]"
+        cmd_prvserver="[\"/usr/local/bin/prvserver\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_conf="[\"/usr/local/bin/conf\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_callqueue="[\"/usr/local/bin/callqueue\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_callpark="[\"/usr/local/bin/callpark\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_anncmnt="[\"/usr/local/bin/anncmnt\", \"-D\",\"/var/lib/portsip/pbx\", \"start\"]"
+        cmd_loadbalancer=
+        cmd_certmanager=
+        cmd_databoard=
     fi
 
     cat << FEOF > docker-compose-portsip-pbx.yml
@@ -231,7 +151,7 @@ services:
 
   initdt:
     image: ${pbx_img}
-    command: [ "/usr/local/bin/initdt.sh", "-D", "/var/lib/portsip/pbx", "--pg-superuser-name", "postgres",  "--pg-superuser-password", "${pbx_db_password}" ]
+    command: ${cmd_initdt}
     network_mode: host
     user: root
     container_name: "portsip.initdt"
@@ -244,7 +164,7 @@ services:
 
   nats: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/nats-server", "--log", "/var/lib/portsip/pbx/log/nats.log", "--http_port", "8222"]
+    command: ${cmd_nats}
     network_mode: host
     user: portsip
     container_name: "portsip.nats"
@@ -264,7 +184,7 @@ services:
 
   callmanager: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/callmanager", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_callmanager}
     network_mode: host
     user: portsip
     container_name: "portsip.callmanager"
@@ -289,7 +209,7 @@ services:
 
   mediaserver: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/mediaserver", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_mediaserver}
     network_mode: host
     user: portsip
     container_name: "portsip.mediaserver"
@@ -312,7 +232,7 @@ services:
 
   gateway: 
     image: ${pbx_img}
-    command:  ["/usr/local/bin/apigate", "serve", "-D","/var/lib/portsip/pbx"]
+    command:  ${cmd_gateway}
     network_mode: host
     user: portsip
     container_name: "portsip.gateway"
@@ -330,7 +250,7 @@ services:
 
   websvc: 
     image: ${pbx_img}
-    command: [${webserver_command}]
+    command: ${cmd_websvc}
     network_mode: host
     #user: www-data
     container_name: "portsip.webserver"
@@ -341,14 +261,12 @@ services:
     depends_on:
       initdt:
         condition: service_completed_successfully
-      nats:
-        condition: service_healthy
       gateway:
         condition: service_started
 
   wsspublisher: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/wsspublisher", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_wsspublisher}
     network_mode: host
     user: portsip
     container_name: "portsip.wsspublisher"
@@ -372,7 +290,7 @@ services:
 
   voicemail: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/voicemail", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_voicemail}
     network_mode: host
     user: portsip
     container_name: "portsip.voicemail"
@@ -396,7 +314,7 @@ services:
 
   vr: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/vr", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_vr}
     network_mode: host
     user: portsip
     container_name: "portsip.virtualreceptionist"
@@ -421,7 +339,7 @@ services:
   # PortSIP Notification Center
   notifycenter: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/notifycenter", "-D","/var/lib/portsip/pbx"]
+    command: ${cmd_notifycenter}
     network_mode: host
     user: portsip
     container_name: "portsip.notificationcenter"
@@ -442,7 +360,7 @@ services:
   # PortSIP Provision Sever
   prvserver: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/prvserver", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_prvserver}
     network_mode: host
     user: portsip
     container_name: "portsip.provision"
@@ -467,7 +385,7 @@ services:
   # PortSIP Conference Server
   conf: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/conf", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_conf}
     network_mode: host
     user: portsip
     container_name: "portsip.conference"
@@ -492,7 +410,7 @@ services:
   # PortSIP Call Queue Server
   callqueue: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/callqueue", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_callqueue}
     network_mode: host
     user: portsip
     container_name: "portsip.callqueue"
@@ -517,7 +435,7 @@ services:
   # PortSIP Call Park Server
   callpark: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/callpark", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_callpark}
     network_mode: host
     user: portsip
     container_name: "portsip.callpark"
@@ -542,7 +460,7 @@ services:
   # PortSIP Announcement Server
   anncmnt: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/anncmnt", "-D","/var/lib/portsip/pbx", "start"]
+    command: ${cmd_anncmnt}
     network_mode: host
     user: portsip
     container_name: "portsip.announcement"
@@ -565,12 +483,13 @@ services:
         condition: service_started
 FEOF
 
-    if [ $ret -eq 0 ]; then
+    # ret: 1 for success and 0 for failure
+    if [ $less_than_16_1 -eq 0 ]; then
       cat << NBEOF >> docker-compose-portsip-pbx.yml
   # PortSIP loadbalancer
   loadbalancer: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/loadbalancer", "-D","/var/lib/portsip/pbx"]
+    command: ${cmd_loadbalancer}
     network_mode: host
     user: portsip
     container_name: "portsip.loadbalancer"
@@ -590,10 +509,32 @@ FEOF
       database:
         condition: service_healthy
 
+  # PortSIP Cert Manager
+  certmanager:
+    image: ${pbx_img}
+    command: ${cmd_certmanager}
+    network_mode: host
+    user: root
+    container_name: "portsip.certmanager"
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+      - /etc/docker:/etc/docker
+      - /usr/bin/docker:/usr/bin/docker
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    depends_on:
+      initdt:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+
   # PortSIP Data Board
   databoard: 
     image: ${pbx_img}
-    command: ["node", "server.js", "/var/lib/portsip/pbx"]
+    command: ${cmd_databoard}
     network_mode: host
     environment:
       - PORT=8889
@@ -628,8 +569,6 @@ create() {
     echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
-
-    set_firewall
 
     # remove command firstly
     shift
@@ -767,7 +706,6 @@ status() {
         docker compose -f docker-compose-portsip-pbx.yml ls -a
         docker compose -f docker-compose-portsip-pbx.yml ps -a
     else
-        service_name=$(svc_name $service_name)
         echo ""
         echo "status service $service_name"
         echo ""
@@ -802,7 +740,6 @@ restart() {
         exit 0
     fi
 
-    service_name=$(svc_name $service_name)
     echo ""
     echo "restart service $service_name"
     echo ""
@@ -850,7 +787,6 @@ start() {
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml start
     else
-        service_name=$(svc_name $service_name)
         echo ""
         echo "start service $service_name"
         echo ""
@@ -882,7 +818,6 @@ stop() {
         docker compose -f docker-compose-portsip-pbx.yml stop
         exit 0
     fi
-    service_name=$(svc_name $service_name)
     echo ""
     echo "stop service $service_name"
     echo ""
@@ -916,9 +851,6 @@ rm() {
     #             ;;
     #     esac
     # done
-
-    #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
-    #firewall-cmd --reload
 
     docker compose -f docker-compose-portsip-pbx.yml down
 
