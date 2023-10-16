@@ -331,7 +331,7 @@ create() {
     pbx_extend_svc_datapath="$data_path/$pbx_extend_svc_type"
     if [ ! -d "$pbx_extend_svc_datapath" ]; then
         echo "the current data path $pbx_extend_svc_datapath does not exist, try to create it"
-        mkdir -p $pbx_extend_svc_datapath
+        mkdir -p "$pbx_extend_svc_datapath"
         echo "created"
         echo ""
     fi
