@@ -133,9 +133,10 @@ FEOF
 initdt() {
     mkdir -p "$data_path"/certmanager/log
 
-    chmod 755 "$data_path"
-    chmod -R 755 "$data_path"
-    chown -R 888:888 "$data_path"
+    chmod 755 "$data_path"/certmanager
+    chmod 755 "$data_path"/certmanager/log
+    chown 888:888 "$data_path"/certmanager
+    chown 888:888 "$data_path"/certmanager/log
 }
 
 create() {
