@@ -140,7 +140,7 @@ export_configure() {
     echo 
     echo "export configure file 'docker-compose.yml'"
 
-    local volume_name="pbx-data-$pbx_extend_svc_type"
+    local volume_name="$pbx_extend_svc_type"
     local extend_svc_name="$pbx_extend_svc_type"
 
     cat << VOLINITEOF > docker-compose.yml
@@ -421,7 +421,7 @@ op() {
     rm)
         firewall-cmd -q --permanent --delete-service=${pbx_extend_svc_type} || true
         firewall-cmd --reload
-        local volume_name="pbx-data-$pbx_extend_svc_type"
+        local volume_name="$pbx_extend_svc_type"
         docker compose -f docker-compose.yml down
         docker volume rm `docker volume ls  -q | grep ${volume_name}` || true
         ;;
