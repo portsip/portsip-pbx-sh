@@ -597,6 +597,7 @@ FEOF
     network_mode: host
     environment:
       - PORT=8889
+      - HOSTNAME=0.0.0.0
     user: portsip
     container_name: "portsip.databoard"
     volumes:
