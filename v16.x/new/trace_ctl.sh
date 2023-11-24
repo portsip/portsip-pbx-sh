@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
-# example(use default): sh trace_server_ctl.sh run
+# example(use default): sh trace_ctl.sh run
 #          datapath: /var/lib/portsip
 #          drop days: 5
 #          capture port: 9061
 #          http port: 9080
 
-# example(custom): sh trace_server_ctl.sh run -p /var/lib/trace_server -k 10 -l 12345 -z 23456
+# example(custom): sh trace_ctl.sh run -p /var/lib/trace_server -k 10 -l 12345 -z 23456
 #          datapath: /var/lib/trace_server
 #          drop days: 10
 #          capture port: 23456
@@ -20,14 +20,16 @@ db_img="portsip/trace-server:postgres11-alpine"
 db_password="homerSeven"
 db_user="root"
 db_port=5432
-db_host="127.0.0.1"
+#db_host="127.0.0.1"
 db_svc_name="database"
+db_host=$db_svc_name
 data_drop_days=5
 http_port=9080
 capture_port_1=9060
 capture_port_2=9061
 
 firewall_svc_name="portsip-trace-svc"
+firewall_predfined_ports=
 
 if [ -z $1 ];
 then 
@@ -41,34 +43,49 @@ fi
 
 cd trace_server
 
+configFirewallPorts(){
+    firewall_predfined_ports="${capture_port_1}/tcp ${capture_port_2}/tcp ${http_port}/tcp"
+}
+
 set_firewall(){
+    configFirewallPorts
     echo ""
-    echo "[firewall] Configure firewall rules:"
-    systemctl stop ufw || true
-    systemctl disable ufw  || true
+    echo "[firewall] Configure firewall"
+
+    `systemctl stop ufw &> /dev/null` || true
+    `systemctl disable ufw &> /dev/null` || true
     systemctl enable firewalld
     systemctl start firewalld
-    local pre_svc_exist=false
-    local ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
-    if [ $? -eq 0 ]; then
-        pre_svc_exist=true
-    fi
-    firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
+    echo "[firewall] enabled firewalld"
 
-    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
-    firewall-cmd --reload
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=${firewall_svc_name} || true
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=${capture_port_1}/tcp --add-port=${capture_port_2}/tcp --add-port=${http_port}/tcp
-    if [ "$pre_svc_exist" = true ] ; then
+    ports=
+    pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
+    if [ $pre_svc_exist -eq 1 ]; then
+        ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
+        firewall-cmd --reload > /dev/null
+    fi
+    firewall-cmd -q --permanent --zone=trusted --remove-interface=docker0 > /dev/null || true
+    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} > /dev/null || true
+
+    firewall-cmd -q --permanent --add-service=ssh > /dev/null || true
+    firewall-cmd -q --permanent --new-service=${firewall_svc_name} > /dev/null
+    for fpp in $firewall_predfined_ports
+    do
+        firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$fpp > /dev/null
+    done
+    if [ $pre_svc_exist -eq 1 ] ; then
         for port_rule in $ports
         do
-            firewall-cmd --permanent --service=${firewall_svc_name} --add-port=$port_rule
+            firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$port_rule > /dev/null
         done
     fi
-    firewall-cmd --permanent --add-service=${firewall_svc_name}
-    firewall-cmd --reload
+    firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
+    firewall-cmd --reload > /dev/null
     systemctl restart firewalld
+    echo "[firewall] info service ${firewall_svc_name}:"
+    echo ""
+    firewall-cmd --info-service=${firewall_svc_name}
+    echo ""
     echo "[firewall] done"
 }
 
@@ -95,7 +112,8 @@ services:
       - PGDATA=/var/lib/postgresql/data
       - POSTGRES_USER=${db_user}
       - POSTGRES_PASSWORD=${db_password}
-    network_mode: host
+    expose:
+      - 5432
     restart: unless-stopped
     volumes:
       - /etc/localtime:/etc/localtime
@@ -109,12 +127,18 @@ services:
   heplify:
     image: ${heplify_img}
     container_name: "trace.heplify"
-    network_mode: host
+    ports:
+      - "${capture_port_1}:9060"
+      - "${capture_port_1}:9060/udp"
+      - "${capture_port_2}:9061/tcp"
+    expose:
+      - 9090
+      - 9096
     command:
       - './heplify-server'
     environment:
-      - HEPLIFYSERVER_HEPADDR=0.0.0.0:${capture_port_1}
-      - HEPLIFYSERVER_HEPTCPADDR=0.0.0.0:${capture_port_2}
+      - HEPLIFYSERVER_HEPADDR=0.0.0.0:9060
+      - HEPLIFYSERVER_HEPTCPADDR=0.0.0.0:9061
       - HEPLIFYSERVER_DBSHEMA=homer7
       - HEPLIFYSERVER_DBDRIVER=postgres
       - HEPLIFYSERVER_DBADDR=${db_host}:${db_port}
@@ -145,9 +169,10 @@ services:
       - DB_HOST=${db_host}
       - DB_USER=${db_user}
       - DB_PASS=${db_password}
-      - HTTP_PORT=${http_port}
+      - HTTP_PORT=80
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "${http_port}:80"
     depends_on:
       ${db_svc_name}:
         condition: service_healthy
@@ -277,12 +302,19 @@ EOF
         echo ""
     fi
 
+    if [ -f $data_path/trace_server_postgresql/.trace_db_pass ] 
+    then
+        db_password=$(cat $data_path/trace_server_postgresql/.trace_db_pass)
+    fi
+
     # change directory mode
     chmod 755 $data_path
 
     export_configure
     # run service
     docker compose up -d
+
+    echo $db_password > $data_path/trace_server_postgresql/.trace_db_pass
 
     echo ""
     echo "[run] done"
