@@ -76,7 +76,7 @@ install_docker_on_debian(){
     echo "====>Try to install the firewalld"
     echo ""
     DEBIAN_FRONTEND=noninteractive apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld -y
-    systemctl stop firewalld
+    #systemctl stop firewalld
     echo ""
     echo "====>Firewalld installed"
     echo ""
@@ -108,4 +108,4 @@ else
     exit
 fi
 
-systemctl start docker
+systemctl restart docker
