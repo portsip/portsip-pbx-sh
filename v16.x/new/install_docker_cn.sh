@@ -73,7 +73,7 @@ install_docker_on_debian(){
     echo "====>Try to install the firewalld"
     echo ""
     DEBIAN_FRONTEND=noninteractive apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld -y
-    #systemctl stop firewalld
+    systemctl stop firewalld
     echo ""
     echo "====>Firewalld installed"
     echo ""
@@ -86,12 +86,13 @@ install_docker_on_debian(){
     DEBIAN_FRONTEND=noninteractive apt-get update -y
     DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
     systemctl enable docker
-    #systemctl stop docker
+    systemctl stop docker
     echo ""
     echo "====>Successfully to install the docker"
     echo ""
 
     sed -i 's#IndividualCalls=no#IndividualCalls=yes#g' /etc/firewalld/firewalld.conf
+    systemctl restart firewalld
 }
 
 if [  -f "/etc/redhat-release" ];then

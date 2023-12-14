@@ -2,10 +2,11 @@
 set -e
 
 firewall_svc_name="portsip-pbx"
+firewall_predfined_ports="8887-8889/tcp 8885/tcp 4222/tcp 80/tcp 443/tcp 5060/udp 5061/tcp 5063/tcp 45000-65000/udp"
 
 if [ -z $1 ];
 then 
-    echo "=> need parameters <="
+    echo "[run] need parameters"
     exit -1
 fi
 
@@ -17,34 +18,52 @@ cd pbx
 
 set_firewall(){
     echo ""
-    echo "Configure firewall rules:"
-    systemctl stop ufw || true
-    systemctl disable ufw  || true
+    echo "[firewall] Configure firewall"
+
+    `systemctl stop ufw &> /dev/null` || true
+    `systemctl disable ufw &> /dev/null` || true
     systemctl enable firewalld
     systemctl start firewalld
-    local pre_svc_exist=false
-    local ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
-    if [ $? -eq 0 ]; then
-        pre_svc_exist=true
-    fi
-    firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
+    echo "[firewall] enabled firewalld"
 
-    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
-    firewall-cmd --reload
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=${firewall_svc_name} || true
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=8887-8889/tcp --add-port=8885/tcp --add-port=4222/tcp --add-port=80/tcp --add-port=443/tcp
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=5060/udp --add-port=5061/tcp --add-port=5063/tcp --add-port=45000-65000/udp
-    if [ "$pre_svc_exist" = true ] ; then
-        for port_rule in $ports
+    ports=
+    pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
+    if [ $pre_svc_exist -eq 1 ]; then
+        ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
+        firewall-cmd --reload > /dev/null
+    fi
+    firewall-cmd -q --permanent --zone=trusted --remove-interface=docker0 > /dev/null || true
+    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} > /dev/null || true
+
+    firewall-cmd -q --permanent --add-service=ssh > /dev/null || true
+    firewall-cmd -q --permanent --new-service=${firewall_svc_name} > /dev/null
+    for fpp in $firewall_predfined_ports
+    do
+        firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$fpp > /dev/null
+    done
+    if [ $pre_svc_exist -eq 1 ] ; then
+        for pts in $ports
         do
-            firewall-cmd --permanent --service=${firewall_svc_name} --add-port=$port_rule
+            firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$pts > /dev/null
         done
     fi
-    firewall-cmd --permanent --add-service=${firewall_svc_name}
-    firewall-cmd --reload
+    firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
+    firewall-cmd --reload > /dev/null
     systemctl restart firewalld
-    echo "done"
+    echo "[firewall] info service ${firewall_svc_name}:"
+    echo ""
+    firewall-cmd --info-service=${firewall_svc_name}
+    echo ""
+    echo "[firewall] done"
+}
+
+config_sysctls() {
+
+    cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
+net.ipv4.ip_unprivileged_port_start=0
+EOF
+    sysctl -p
+    sysctl --system
 }
 
 export_pbx_production_version() {
@@ -171,7 +190,7 @@ svc_name() {
 # $5: pbx_db_password
 export_configure() {
     echo 
-    echo "export configure file 'docker-compose-portsip-pbx.yml'"
+    echo "[compose] export configure file 'docker-compose-portsip-pbx.yml'"
 
     local pbx_data_path=$1
     local pbx_ip_address=$2
@@ -619,18 +638,20 @@ FEOF
 NBEOF
     fi
 
-    echo "done"
+    echo "[compose] done"
     echo ""
 }
 
 create() {
     echo ""
-    echo "==> try to create pbx service <=="
+    echo "[run] try to create pbx service"
     echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
 
     set_firewall
+
+    config_sysctls
 
     # remove command firstly
     shift
@@ -663,20 +684,20 @@ create() {
 
     # check parameters is exist
     if [ -z "$data_path" ]; then
-        echo "\t Option -p not specified"
+        echo "[run] Option -p not specified"
         exit -1
     fi
     if [ -z "$ip_address" ]; then
-        echo "\t Option -a not specified"
+        echo "[run] Option -a not specified"
         exit -1
     fi
     if [ -z "$pbx_img" ]; then
-        echo "\t Option -i not specified"
+        echo "[run] Option -i not specified"
         exit -1
     fi
 
     if [ -z "$db_img" ]; then
-        echo "\t Option -d not specified"
+        echo "[run] Option -d not specified"
         exit -1
     fi
 
@@ -685,31 +706,32 @@ create() {
         db_password=`sed -nr "/^\[database\]/ { :l /^superuser_password[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;}" $data_path/pbx/system.ini`
     fi
     if [ -z "$db_password" ]; then
-        echo "\t Password is empty"
+        echo "[run] Password is empty"
         exit -1
     fi
 
     echo ""
-    echo "datapath: $data_path"
-    echo "ip      : $ip_address"
-    echo "pbx  img: $pbx_img"
-    echo "db   img: $db_img"
+    echo "[run] parameters"
+    echo "    datapath: $data_path"
+    echo "    ip      : $ip_address"
+    echo "    pbx  img: $pbx_img"
+    echo "    db   img: $db_img"
     echo ""
 
     # check datapath whether exist
     if [ ! -d "$data_path/pbx" ]; then
-        echo "datapath $data_path/pbx not exist, try to create it"
+        echo "[run] datapath $data_path/pbx not exist, try to create it"
         mkdir -p $data_path/pbx
-        echo "created"
+        echo "[run] created"
         echo ""
     fi
 
     # check db datapath whether exist
     if [ ! -d "$data_path/postgresql" ]; then
         echo ""
-        echo "db datapath $data_path/postgresql not exist, try to create it"
+        echo "[run] db datapath $data_path/postgresql not exist, try to create it"
         mkdir -p $data_path/postgresql
-        echo "created"
+        echo "[run] created"
         echo ""
     fi
 
@@ -729,17 +751,17 @@ EOF
     docker image pull $pbx_img
     local version=$(export_pbx_production_version $pbx_img)
     if [ -z "$version" ]; then
-        echo "not found label 'version' in pbx docker image, just use default '16.0'"
+        echo "[run] not found label 'version' in pbx docker image, just use default '16.0'"
         version="16.0.1"
     fi
-    echo "pbx version $version"
+    echo "[run] pbx version $version"
 
     export_configure $data_path $ip_address $pbx_img $db_img $db_password $version
     # run pbx service
     docker compose -f docker-compose-portsip-pbx.yml up -d
 
     echo ""
-    echo "done"
+    echo "[run] done"
     echo ""
 }
 
@@ -763,14 +785,14 @@ status() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "status all services"
+        echo "[op] status all services"
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml ls -a
         docker compose -f docker-compose-portsip-pbx.yml ps -a
     else
         service_name=$(svc_name $service_name)
         echo ""
-        echo "status service $service_name"
+        echo "[op] status service $service_name"
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml ps $service_name
     fi
@@ -795,7 +817,7 @@ restart() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "restart all services"
+        echo "[op] restart all services"
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml stop -t 300
         sleep 10
@@ -805,7 +827,7 @@ restart() {
 
     service_name=$(svc_name $service_name)
     echo ""
-    echo "restart service $service_name"
+    echo "[op] restart service $service_name"
     echo ""
     case $service_name in
     database)
@@ -847,13 +869,13 @@ start() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "start all services"
+        echo "[op] start all services"
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml start
     else
         service_name=$(svc_name $service_name)
         echo ""
-        echo "start service $service_name"
+        echo "[op] start service $service_name"
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml start $service_name
     fi
@@ -878,14 +900,14 @@ stop() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "stop all services"
+        echo "[op] stop all services"
         echo ""
         docker compose -f docker-compose-portsip-pbx.yml stop
         exit 0
     fi
     service_name=$(svc_name $service_name)
     echo ""
-    echo "stop service $service_name"
+    echo "[op] stop service $service_name"
     echo ""
     case $service_name in
     database)
@@ -953,7 +975,6 @@ rm)
     ;;
 
 *)
-    echo "\t error command"
+    echo "[run] error command"
     ;;
 esac
-
