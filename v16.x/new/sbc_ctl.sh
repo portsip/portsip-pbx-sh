@@ -2,6 +2,7 @@
 set -e
 
 firewall_svc_name="portsip-sbc"
+firewall_predfined_ports="25000-35000/udp 5066/udp 5065/tcp 5067/tcp 5069/tcp 8882/tcp 8883/tcp 10443/tcp"
 
 create_help() {
     echo
@@ -30,32 +31,53 @@ then
 fi
 
 set_firewall(){
-    echo "Configure firewall rules"
-    systemctl stop ufw || true
-    systemctl disable ufw  || true
+    echo ""
+    echo "[firewall] Configure firewall"
+
+    `systemctl stop ufw &> /dev/null` || true
+    `systemctl disable ufw &> /dev/null` || true
     systemctl enable firewalld
     systemctl start firewalld
-    local pre_svc_exist=false
-    local ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
-    if [ $? -eq 0 ]; then
-        pre_svc_exist=true
+    echo "[firewall] enabled firewalld"
+
+    ports=
+    pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
+    if [ $pre_svc_exist -eq 1 ]; then
+        ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
+        firewall-cmd --reload > /dev/null
     fi
-    firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent
-    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
-    firewall-cmd --reload
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --new-service=${firewall_svc_name} || true
-    firewall-cmd --permanent --service=${firewall_svc_name} --add-port=25000-35000/udp --add-port=5066/udp --add-port=5065/tcp --add-port=5067/tcp --add-port=5069/tcp --add-port=8882/tcp --add-port=8883/tcp --add-port=10443/tcp --set-description="PortSIP SBC"
-    if [ "$pre_svc_exist" = true ] ; then
+    firewall-cmd -q --permanent --zone=trusted --remove-interface=docker0 > /dev/null || true
+    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} > /dev/null || true
+
+    firewall-cmd -q --permanent --add-service=ssh > /dev/null || true
+    firewall-cmd -q --permanent --new-service=${firewall_svc_name} > /dev/null
+    for fpp in $firewall_predfined_ports
+    do
+        firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$fpp > /dev/null
+    done
+    if [ $pre_svc_exist -eq 1 ] ; then
         for port_rule in $ports
         do
-            firewall-cmd --permanent --service=${firewall_svc_name} --add-port=$port_rule
+            firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$port_rule > /dev/null
         done
     fi
-    firewall-cmd --permanent --add-service=${firewall_svc_name}
-    firewall-cmd --reload
+    firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
+    firewall-cmd --reload > /dev/null
     systemctl restart firewalld
-    echo "done"
+    echo "[firewall] info service ${firewall_svc_name}:"
+    echo ""
+    firewall-cmd --info-service=${firewall_svc_name}
+    echo ""
+    echo "[firewall] done"
+}
+
+config_sysctls() {
+
+    cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
+net.ipv4.ip_unprivileged_port_start=0
+EOF
+    sysctl -p
+    sysctl --system
 }
 
 create() {
@@ -64,6 +86,8 @@ create() {
     echo ""
 
     set_firewall
+
+    config_sysctls
 
     # remove command firstly
     shift
