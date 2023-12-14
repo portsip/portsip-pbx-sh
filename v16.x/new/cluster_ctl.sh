@@ -23,6 +23,9 @@ pbx_extend_svc_name=
 pbx_production_version=
 pbx_extend_svc_datapath=
 
+firewall_predfined_ports=
+firewall_svc_name=
+
 export_pbx_production_version() {
     local null_str=null
     local labels=$(docker image inspect --format='{{json .Config.Labels}}' $pbx_img)
@@ -98,6 +101,7 @@ parse_cmd_parameters() {
                 ;;
             s)
                 pbx_extend_svc_type=${OPTARG}
+                firewall_svc_name=${OPTARG}
                 ;;
             n)
                 pbx_extend_svc_name=${OPTARG}
@@ -251,50 +255,72 @@ initdt() {
     chown -R 888:888 $pbx_extend_svc_datapath
 }
 
-set_firewall() {
-    echo ""
-    echo "stop the ufw"
-    echo ""
-    systemctl stop ufw || true
-    systemctl disable ufw || true
-    echo ""
-    echo "enable the firewalld"
-    echo ""
-    systemctl enable firewalld
-    systemctl start firewalld
-    echo ""
-    echo "configure firewall rules for ${pbx_extend_svc_type} ${pbx_extend_svc_name}"
-    echo ""
-    firewall-cmd -q --zone=trusted --remove-interface=docker0 --permanent || true
-    firewall-cmd -q --permanent --delete-service=${pbx_extend_svc_type} || true
-    firewall-cmd --reload
-    firewall-cmd --permanent --new-service=${pbx_extend_svc_type} || true
-
+configFirewallPorts(){
     case "${pbx_extend_svc_type}" in
     queue-server-only)
-        #firewall-cmd --permanent --service=${pbx_extend_svc_type} --add-port=50000-65000/udp --add-port=8916-8921/udp --add-port=8916-8921/tcp --set-description="PortSIP Call Queue Server"
-        firewall-cmd --permanent --service=${pbx_extend_svc_type} --add-port=8916-8921/udp --add-port=8916-8921/tcp --set-description="PortSIP Call Queue Server"
+        firewall_predfined_ports="8916-8921/udp 8916-8921/tcp"
         ;;
     media-server-only)
-        firewall-cmd --permanent --service=${pbx_extend_svc_type} --add-port=35000-65000/udp --add-port=8840-8845/udp --add-port=8840-8845/tcp --set-description="PortSIP Media Server"
+        firewall_predfined_ports="35000-65000/udp 8840-8845/udp 8840-8845/tcp"
         ;;
     meeting-server-only)
-        #firewall-cmd --permanent --service=${pbx_extend_svc_type} --add-port=50000-65000/udp --add-port=8928-8933/udp --add-port=8928-8933/tcp --set-description="PortSIP Meeting Server"
-        firewall-cmd --permanent --service=${pbx_extend_svc_type} --add-port=8928-8933/udp --add-port=8928-8933/tcp --set-description="PortSIP Meeting Server"
+        firewall_predfined_ports="8928-8933/udp 8928-8933/tcp"
         ;;
     vr-server-only)
-        #firewall-cmd --permanent --service=${pbx_extend_svc_type} --add-port=50000-65000/udp  --add-port=8922-8927/udp --add-port=8922-8927/tcp --set-description="PortSIP VR Server"
-        firewall-cmd --permanent --service=${pbx_extend_svc_type} --add-port=8922-8927/udp --add-port=8922-8927/tcp --set-description="PortSIP VR Server"
+        firewall_predfined_ports="8922-8927/udp 8922-8927/tcp"
         ;;
     esac
+}
 
-    firewall-cmd --permanent --add-service=${pbx_extend_svc_type}
-    firewall-cmd --reload
+set_firewall(){
+    configFirewallPorts
+    echo ""
+    echo "[firewall] Configure firewall"
+
+    `systemctl stop ufw &> /dev/null` || true
+    `systemctl disable ufw &> /dev/null` || true
+    systemctl enable firewalld
+    systemctl start firewalld
+    echo "[firewall] enabled firewalld"
+
+    ports=
+    pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
+    if [ $pre_svc_exist -eq 1 ]; then
+        ports="$(firewall-cmd --permanent --service=${firewall_svc_name} --get-ports)"
+        firewall-cmd --reload > /dev/null
+    fi
+    firewall-cmd -q --permanent --zone=trusted --remove-interface=docker0 > /dev/null || true
+    firewall-cmd -q --permanent --delete-service=${firewall_svc_name} > /dev/null || true
+
+    firewall-cmd -q --permanent --add-service=ssh > /dev/null || true
+    firewall-cmd -q --permanent --new-service=${firewall_svc_name} > /dev/null
+    for fpp in $firewall_predfined_ports
+    do
+        firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$fpp > /dev/null
+    done
+    if [ $pre_svc_exist -eq 1 ] ; then
+        for port_rule in $ports
+        do
+            firewall-cmd -q --permanent --service=${firewall_svc_name} --add-port=$port_rule > /dev/null
+        done
+    fi
+    firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
+    firewall-cmd --reload > /dev/null
     systemctl restart firewalld
-    firewall-cmd --permanent --info-service=${pbx_extend_svc_type}
+    echo "[firewall] info service ${firewall_svc_name}:"
     echo ""
-    echo "====>Firewalld configure done"
+    firewall-cmd --info-service=${firewall_svc_name}
     echo ""
+    echo "[firewall] done"
+}
+
+config_sysctls() {
+
+    cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
+net.ipv4.ip_unprivileged_port_start=0
+EOF
+    sysctl -p
+    sysctl --system
 }
 
 create() {
@@ -311,6 +337,8 @@ create() {
     verify_parameters
 
     set_firewall
+
+    config_sysctls
 
     # change work directory
     if [ ! -d "./$pbx_extend_svc_type" ]; then
