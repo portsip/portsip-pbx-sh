@@ -22,6 +22,27 @@ install_docker_on_centos(){
     echo ""
 }
 
+install_docker_on_redhat(){
+    echo ""
+    echo "[docker] installing on redhat"
+    echo ""
+    yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine podman runc
+    yum install -y yum-utils device-mapper-persistent-data lvm2 firewalld
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    yum update -y
+    
+    echo ""
+    echo "[docker] trying"
+    echo ""
+    yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    systemctl start docker
+    systemctl enable docker || exit -1
+    #systemctl stop docker
+    echo ""
+    echo "[docker] installed"
+    echo ""
+}
+
 # install docker and docker compose plugin
 install_docker_on_ubuntu(){
     echo ""
@@ -72,7 +93,7 @@ install_docker_on_debian(){
     echo ""
     echo "====>Try to install the firewalld"
     echo ""
-    DEBIAN_FRONTEND=noninteractive apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld -y
+    DEBIAN_FRONTEND=noninteractive apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld procps -y
     systemctl stop firewalld
     echo ""
     echo "====>Firewalld installed"
@@ -95,14 +116,20 @@ install_docker_on_debian(){
     systemctl restart firewalld
 }
 
-if [  -f "/etc/redhat-release" ];then
+if grep -q "CentOS" /etc/os-release; then
+    echo "[docker] System is CentOS"
     install_docker_on_centos
-elif [ -f "/etc/lsb-release" ];then
+elif grep -q "Red Hat" /etc/os-release; then
+    echo "[docker] System is RedHat"
+    install_docker_on_redhat
+elif grep -q "Ubuntu" /etc/os-release; then
+    echo "[docker] System is Ubuntu"
     install_docker_on_ubuntu
-elif [ -f "/etc/debian_version" ];then
+elif grep -q "Debian" /etc/os-release; then
+    echo "[docker] System is Debian"
     install_docker_on_debian
 else
-    echo "Unknown operating system"
+    echo "[docker] Unknown operating system"
     exit
 fi
 
