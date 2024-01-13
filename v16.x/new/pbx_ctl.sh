@@ -62,8 +62,8 @@ config_sysctls() {
     cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
 net.ipv4.ip_unprivileged_port_start=0
 EOF
-    sysctl -p
-    sysctl --system
+    sysctl -p || true
+    sysctl --system || true
 }
 
 export_pbx_production_version() {
