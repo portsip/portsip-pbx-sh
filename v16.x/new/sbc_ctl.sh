@@ -2,7 +2,7 @@
 set -e
 
 firewall_svc_name="portsip-sbc"
-firewall_predfined_ports="25000-35000/udp 5066/udp 5065/tcp 5067/tcp 5069/tcp 8882/tcp 8883/tcp 10443/tcp"
+firewall_predfined_ports="25000-34999/udp 5066/udp 5065/tcp 5067/tcp 5069/tcp 8882/tcp 8883/tcp 10443/tcp"
 
 create_help() {
     echo
