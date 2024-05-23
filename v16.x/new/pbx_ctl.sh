@@ -615,7 +615,7 @@ FEOF
     command: ["node", "server.js", "/var/lib/portsip/pbx"]
     network_mode: host
     environment:
-      - PORT=8889
+      - PORT=8890
       - HOSTNAME=0.0.0.0
     user: portsip
     container_name: "portsip.databoard"
