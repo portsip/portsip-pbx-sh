@@ -660,7 +660,7 @@ create() {
     local ip_address=
     local pbx_img=
     local db_listen_address=0.0.0.0
-    local db_img="portsip/postgresql:14"
+    local db_img="portsip/postgresql:14.12"
     #  generate db password
     local db_password=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20`
     # parse parameters
