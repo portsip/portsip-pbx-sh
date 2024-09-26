@@ -127,9 +127,11 @@ elif grep -q "Red Hat" /etc/os-release; then
     install_docker_on_redhat
 elif grep -q "Ubuntu" /etc/os-release; then
     echo "[docker] System is Ubuntu"
+    apt remove -y ufw || true
     install_docker_on_ubuntu
 elif grep -q "Debian" /etc/os-release; then
     echo "[docker] System is Debian"
+    apt remove -y ufw || true
     install_docker_on_debian
 else
     echo "[docker] Unknown operating system"
