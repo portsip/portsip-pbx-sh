@@ -41,7 +41,7 @@ LEOF
     grep -o '"version":"[^"]*' labels.json | grep -o '[^"]*$'
 }
 
-is_pbx_production_version_less_than_16_1() {
+is_pbx_production_version_less_than_22_0() {
     # x.y.z
     local v=$pbx_production_version
 
@@ -52,11 +52,7 @@ is_pbx_production_version_less_than_16_1() {
     local z=$3
     set +f; unset IFS
 
-    if [ $x -lt 16 ]; then
-        echo 1
-    elif [ $x -gt 16 ]; then
-        echo 0
-    elif [ $y -lt 1 ]; then
+    if [ $x -lt 22 ]; then
         echo 1
     else
         echo 0
@@ -379,15 +375,15 @@ EOF
     docker image pull $pbx_img
     pbx_production_version=$(export_pbx_production_version)
     if [ -z "$pbx_production_version" ]; then
-        echo "no 'version' information found in the docker image, just use '16.0'"
-        pbx_production_version="16.0.1"
+        echo "no 'version' information found in the docker image"
+        exit -1
     fi
     echo "current pbx version $pbx_production_version"
     # pbx >= 16.1
-    local ret=$(is_pbx_production_version_less_than_16_1)
+    local ret=$(is_pbx_production_version_less_than_22_0)
     # ret: 1 for success and 0 for failure
     if [ $ret -eq 1 ]; then
-      echo "when the pbx version is less than 16.1.0, the extended service is not supported."
+      echo "[error] pbx version < 22.0.0"
       exit -1
     fi
 
