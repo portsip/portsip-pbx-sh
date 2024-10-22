@@ -20,7 +20,12 @@ fi
 chmod 755 $workspace
 
 # remove all scripts
-rm -rf $workspace/*.sh
+rm -rf $workspace/install_docker.sh || true
+rm -rf $workspace/pbx_ctl.sh || true
+rm -rf $workspace/sbc_ctl.sh || true
+rm -rf $workspace/im_ctl.sh || true
+rm -rf $workspace/cluster_ctl.sh || true
+rm -rf $workspace/trace_ctl.sh || true
 
 # cache scripts
 echo "download $scriptInstallDockerUrl => $workspace/install_docker.sh"
