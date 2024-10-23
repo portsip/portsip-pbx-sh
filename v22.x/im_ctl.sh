@@ -429,7 +429,7 @@ services:
 
   websvc: 
     image: ${im_img}
-    command: [${webserver_command}]
+    command: ["/bin/bash", "/usr/local/bin/run_im_websrv.sh", ${webserver_command}]
     network_mode: host
     #user: www-data
     container_name: "portsip.webserver"
