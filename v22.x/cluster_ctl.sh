@@ -144,7 +144,6 @@ export_configure() {
     local extend_svc_name="$pbx_extend_svc_type"
 
     cat << VOLINITEOF > docker-compose.yml
-version: "3.9"
 
 volumes:
   ${volume_name}:

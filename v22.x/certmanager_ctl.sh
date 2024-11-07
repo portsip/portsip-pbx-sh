@@ -102,8 +102,6 @@ export_configure() {
     fi
 
     cat << FEOF > docker-compose-portsip-certmanager.yml
-version: "3.9"
-
 volumes:
   certmanager-data:
     driver: local

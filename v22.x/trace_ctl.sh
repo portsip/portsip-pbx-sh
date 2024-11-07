@@ -94,7 +94,6 @@ export_configure() {
     echo "[config] export configure file 'docker-compose.yml'"
 
     cat << FEOF > docker-compose.yml
-version: "3.9"
 
 volumes:
   trace-data-db:
