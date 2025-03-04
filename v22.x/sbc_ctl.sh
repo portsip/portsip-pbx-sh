@@ -288,6 +288,54 @@ rm() {
     docker rm -f portsip.sbc
 }
 
+upgrade(){
+    shift
+
+    new_sbc_img=
+
+    # parse parameters
+    while getopts i: option
+    do 
+        case "${option}" in
+            i)
+                new_sbc_img=${OPTARG}
+                ;;
+        esac
+    done
+
+    # check the container exist
+    docker inspect portsip.sbc > /dev/null
+    # get docker image id
+    used_sbc_img=$(docker ps -a --filter "name=^portsip.sbc$" --format "{{.Image}}")
+    echo "sbc_img: used/$used_sbc_img new/$new_sbc_img"
+    # get data path
+    used_sbc_datapath=$(docker inspect -f '{{range .Mounts}}{{if gt (len .Source) 4}}{{if eq (slice .Source (slice .Source 3|len)) "sbc"}}{{slice .Source 0 (slice .Source 4|len)}} {{end}}{{end}}{{end}}' portsip.sbc)
+    if [ -z "$used_sbc_datapath" ]; then
+        echo ""
+        echo "ERROR: data path is empty"
+        echo ""
+        exit -1
+    fi
+    
+    # remove container
+    docker stop -t 60 portsip.sbc > /dev/null 2>&1 || true
+    docker rm -f portsip.sbc > /dev/null 2>&1
+    # remove docker image
+    docker image rm -f $used_sbc_img > /dev/null 2>&1
+    # re-create
+    echo ""
+    echo "start upgrade"
+    echo ""
+    if [ -z "$new_sbc_img" ]; then
+        create run -i $used_sbc_img -p $used_sbc_datapath
+    else
+        create run -i $new_sbc_img -p $used_sbc_datapath
+    fi
+    echo ""
+    echo "upgraded"
+    echo ""
+}
+
 case $1 in
 run)
     create $@
@@ -311,6 +359,10 @@ start)
 
 rm)
     rm $@
+    ;;
+
+upgrade)
+    upgrade $@
     ;;
 
 *)
