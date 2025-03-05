@@ -726,7 +726,7 @@ upgrade(){
 
     # check the container exist
     docker inspect portsip.instantmessage > /dev/null
-        # change work directory
+    # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
         echo ""
         echo "[error]: the resources that the im service depends on are lost."

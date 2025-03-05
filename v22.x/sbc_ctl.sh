@@ -336,6 +336,39 @@ upgrade(){
     echo ""
 }
 
+disable_upgrade(){
+    # disable unattended-upgrades
+    systemctl stop unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl disable unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl mask unattended-upgrades  > /dev/null 2>&1 || true
+    apt remove -y unattended-upgrades  > /dev/null 2>&1 || true
+
+    echo "removed unattended-upgrades"
+
+    # disable  apt daily
+    systemctl stop apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily.service  > /dev/null 2>&1 || true
+
+    # disable  apt upgrade
+    systemctl stop apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily-upgrade.service  > /dev/null 2>&1 || true
+
+    echo "disabled apt-daily-upgrade apt-daily"
+}
+
+echo "[warning] disable system auto update"
+if grep -q "Ubuntu" /etc/os-release; then
+    disable_upgrade
+elif grep -q "Debian" /etc/os-release; then
+    disable_upgrade
+fi
+
 case $1 in
 run)
     create $@

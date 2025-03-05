@@ -14,6 +14,8 @@ if [ ! -d "./pbx" ]; then
     mkdir pbx
 fi
 
+pbx_deploy_config_file=".configure_pbx"
+
 cd pbx
 
 set_firewall(){
@@ -1060,6 +1062,105 @@ EOF
     echo ""
 }
 
+disable_upgrade(){
+    # disable unattended-upgrades
+    systemctl stop unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl disable unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl mask unattended-upgrades  > /dev/null 2>&1 || true
+    apt remove -y unattended-upgrades  > /dev/null 2>&1 || true
+
+    echo "removed unattended-upgrades"
+
+    # disable  apt daily
+    systemctl stop apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily.service  > /dev/null 2>&1 || true
+
+    # disable  apt upgrade
+    systemctl stop apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily-upgrade.service  > /dev/null 2>&1 || true
+
+    echo "disabled apt-daily-upgrade apt-daily"
+}
+
+upgrade(){
+    shift
+
+    new_pbx_img=
+
+    # parse parameters
+    while getopts i: option
+    do 
+        case "${option}" in
+            i)
+                new_pbx_img=${OPTARG}
+                ;;
+        esac
+    done
+
+    # check the container exist
+    docker inspect portsip.callmanager > /dev/null
+
+    if [ ! -f "$pbx_deploy_config_file" ]; then 
+        echo ""
+        echo "[error]: the configures that the pbx service depends on are lost."
+        echo ""
+        exit -1
+    fi
+
+    # read configures from .configure_im
+    data_path=$(sed -n '/^PBX_DATA_PATH/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    ip_address=$(sed -n '/^IP_ADDRESS/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    pbx_img=$(sed -n '/^PBX_IMG/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    db_img=$(sed -n '/^PBX_DB_IMG/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    db_password=$(sed -n '/^DB_PASSWORD/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    storage=$(sed -n '/^STORAGE/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+
+    echo ""
+    echo "[upgrade] parameters"
+    echo "    datapath: $data_path"
+    echo "    ip      : $ip_address"
+    echo "    pbx  img: used/$pbx_img new/$new_pbx_img"
+    echo "    db   img: $db_img"
+    echo "     storage: $storage"
+    echo ""
+
+    # remove container
+    echo "[info]: start upgrade"
+    rm
+    echo "[info]: the old service has been deleted"
+    # re-create
+    paras="-p ${data_path} -a $ip_address -d $db_img"
+    if [ -z "$new_pbx_img" ]; then
+        paras="$paras -i $pbx_img"
+    else
+        paras="$paras -i $new_pbx_img"
+    fi
+    if [ ! -z $storage ]; then
+        paras="$paras -f $storage"
+    fi
+
+    command="create run $paras"
+    echo "$command"
+    $command
+
+    echo ""
+    echo "upgraded"
+    echo ""
+}
+
+echo "[warning] disable system auto update"
+if grep -q "Ubuntu" /etc/os-release; then
+    disable_upgrade
+elif grep -q "Debian" /etc/os-release; then
+    disable_upgrade
+fi
+
 case $1 in
 run)
     create $@
@@ -1085,14 +1186,13 @@ rm)
     rm $@
     ;;
 
-upgrade)
+up)
     rm $@
     create $@
     ;;
 
-up)
-    rm $@
-    create $@
+upgrade)
+    upgrade $@
     ;;
 
 *)
