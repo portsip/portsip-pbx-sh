@@ -46,6 +46,8 @@ storage=
 firewall_svc_name="portsip-im"
 firewall_predfined_ports="8887/tcp"
 
+im_deploy_config_file=".configure_im"
+
 export_production_version() {
     local null_str=null
     local labels=$(docker image inspect --format='{{json .Config.Labels}}' $im_img)
@@ -173,7 +175,7 @@ verify_parameters() {
             exit -1
         fi
         
-        ret=$(docker compose ls -a | grep pbx | wc -l)
+        ret=$(docker compose ls -a -q | grep pbx | wc -l)
         if [ $ret -ne 0 ]; then
             echo "\t already exist pbx on this host(containers)"
             exit -1
@@ -707,6 +709,146 @@ op() {
     esac
 }
 
+upgrade(){
+    shift
+
+    new_im_img=
+
+    # parse parameters
+    while getopts i: option
+    do 
+        case "${option}" in
+            i)
+                new_im_img=${OPTARG}
+                ;;
+        esac
+    done
+
+    # check the container exist
+    docker inspect portsip.instantmessage > /dev/null
+        # change work directory
+    if [ ! -d "./$extend_svc_type" ]; then
+        echo ""
+        echo "[error]: the resources that the im service depends on are lost."
+        echo ""
+        exit -1
+    fi
+    cd $extend_svc_type
+
+    if [ ! -f "$im_deploy_config_file" ]; then 
+        echo ""
+        echo "[error]: the configures that the im service depends on are lost."
+        echo ""
+        exit -1
+    fi
+
+    # read configures from .configure_im
+    data_path=$(sed -n '/^DATA_PATH/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    local_pri_ip_address=$(sed -n '/^PRI_IP_ADDRESS/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    local_pub_ip_address=$(sed -n '/^PUB_IP_ADDRESS/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    pbx_ip_address=$(sed -n '/^PBX_IP_ADDRESS/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    im_img=$(sed -n '/^IM_IMG/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    db_img=$(sed -n '/^DB_IMG/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    #extend_svc_type=$(sed -n '/^EXTEND_SVC_TYPE/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    running_mode=$(sed -n '/^RUNNING_MODE/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    storage=$(sed -n '/^STORAGE/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+
+    token_idx=$(docker inspect -f '{{range $index,$element := .Args}}{{if eq $element "-t"}}{{$index}}{{break}}{{end}}{{end}}' portsip.instantmessage)
+    token_idx=$(($token_idx+1))
+    im_token=$(docker inspect -f "{{index .Args $token_idx}}" portsip.instantmessage)
+    if [ -z $im_token ]; then
+        echo ""
+        echo "[error]: failed to get im token"
+        echo ""
+        exit -1
+    fi
+
+    echo "configures:"
+    echo "datapath  : $data_path"
+    echo "ip(pri)   : $local_pri_ip_address"
+    echo "ip(pub)   : $local_pub_ip_address"
+    echo "ip(pbx)   : $pbx_ip_address"
+    echo "im img    : $im_img new/$new_im_img"
+    echo "db img    : $db_img"
+    echo "token     : $im_token"
+    echo "storage   : $storage"
+    echo ""
+
+    # remove container
+    echo "[info]: start upgrade"
+    docker compose -f ${im_compose_file} down -v
+    # remove docker image
+    # docker image rm -f $im_img > /dev/null 2>&1
+    echo "[info]: the old service has been deleted"
+    # re-create
+    paras=
+    if [ $running_mode -eq 1  ]; then
+        paras="-E "
+    fi
+    paras="${paras}-p ${data_path}"
+    if [ -z "$new_im_img" ]; then
+        paras="$paras -i $im_img"
+    else
+        paras="$paras -i $new_im_img"
+    fi
+    paras="${paras} -t ${im_token}"
+    if [ ! -z $storage ]; then
+        paras="$paras -f $storage"
+    fi
+    if [ $running_mode -eq 1  ]; then
+        paras="$paras -d $db_img"
+        if [ ! -z $local_pri_ip_address ]; then
+            paras="$paras -a $local_pri_ip_address"
+        fi
+        if [ ! -z $local_pub_ip_address ]; then
+            paras="$paras -A $local_pub_ip_address"
+        fi
+        if [ ! -z $pbx_ip_address ]; then
+            paras="$paras -x $pbx_ip_address"
+        fi
+    fi
+
+    command="create run $paras"
+    $command
+
+    echo ""
+    echo "upgraded"
+    echo ""
+}
+
+disable_upgrade(){
+    # disable unattended-upgrades
+    systemctl stop unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl disable unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl mask unattended-upgrades  > /dev/null 2>&1 || true
+    apt remove -y unattended-upgrades  > /dev/null 2>&1 || true
+
+    echo "removed unattended-upgrades"
+
+    # disable  apt daily
+    systemctl stop apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily.service  > /dev/null 2>&1 || true
+
+    # disable  apt upgrade
+    systemctl stop apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily-upgrade.service  > /dev/null 2>&1 || true
+
+    echo "disabled apt-daily-upgrade apt-daily"
+}
+
+echo "[warning] disable system auto update"
+if grep -q "Ubuntu" /etc/os-release; then
+    disable_upgrade
+elif grep -q "Debian" /etc/os-release; then
+    disable_upgrade
+fi
+
 case $1 in
 run)
     create $@
@@ -730,6 +872,10 @@ start)
 
 rm)
     op $@
+    ;;
+
+upgrade)
+    upgrade $@
     ;;
 
 *)
