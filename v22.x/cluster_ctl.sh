@@ -26,6 +26,9 @@ pbx_extend_svc_datapath=
 firewall_predfined_ports=
 firewall_svc_name=
 
+pbx_extend_svc_container_name=
+pbx_exend_deploy_config_file=".configure_extend"
+
 export_pbx_production_version() {
     local null_str=null
     local labels=$(docker image inspect --format='{{json .Config.Labels}}' $pbx_img)
@@ -444,13 +447,138 @@ op() {
     rm)
         firewall-cmd -q --permanent --delete-service=${pbx_extend_svc_type} || true
         firewall-cmd --reload
-        local volume_name="$pbx_extend_svc_type"
-        docker compose -f docker-compose.yml down
-        docker volume rm `docker volume ls  -q | grep ${volume_name}` || true
+        #local volume_name="$pbx_extend_svc_type"
+        docker compose -f docker-compose.yml down -v
+        #docker volume rm `docker volume ls  -q | grep ${volume_name}` || true
         ;;
 
     esac
 }
+
+disable_upgrade(){
+    # disable unattended-upgrades
+    systemctl stop unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl disable unattended-upgrades  > /dev/null 2>&1 || true
+    systemctl mask unattended-upgrades  > /dev/null 2>&1 || true
+    apt remove -y unattended-upgrades  > /dev/null 2>&1 || true
+
+    echo "removed unattended-upgrades"
+
+    # disable  apt daily
+    systemctl stop apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily.service  > /dev/null 2>&1 || true
+
+    # disable  apt upgrade
+    systemctl stop apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl stop apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.timer  > /dev/null 2>&1 || true
+    systemctl disable apt-daily-upgrade.service  > /dev/null 2>&1 || true
+    systemctl mask apt-daily-upgrade.service  > /dev/null 2>&1 || true
+
+    echo "disabled apt-daily-upgrade apt-daily"
+}
+
+service_container_name(){
+    case "${pbx_extend_svc_type}" in
+    queue-server-only)
+        pbx_extend_svc_container_name="portsip.callqueue"
+        ;;
+    media-server-only)
+        pbx_extend_svc_container_name="portsip.mediaserver"
+        ;;
+    meeting-server-only)
+        pbx_extend_svc_container_name="portsip.conference"
+        ;;
+    vr-server-only)
+        pbx_extend_svc_container_name="portsip.virtualreceptionist"
+        ;;
+    *)
+        echo "[error]: service type ${pbx_extend_svc_type} is not supported."
+        exit -1
+    esac
+}
+
+upgrade(){
+    shift
+
+    parse_cmd_parameters $@
+    # check parameters is exist
+    if [ -z "$pbx_extend_svc_type" ]; then
+        echo "[error]: option -s not specified"
+        exit -1
+    fi
+    verify_svc_type
+    service_container_name
+    
+    # check the container exist
+    docker inspect ${pbx_extend_svc_container_name} > /dev/null
+    # change work directory
+    if [ ! -d "./$pbx_extend_svc_type" ]; then
+        echo ""
+        echo "[error]: the resources that the $pbx_extend_svc_type service depends on are lost."
+        echo ""
+        exit -1
+    fi
+    cd $pbx_extend_svc_type
+
+    if [ ! -f "$pbx_exend_deploy_config_file" ]; then 
+        echo ""
+        echo "[error]: the configures that the $pbx_extend_svc_type service depends on are lost."
+        echo ""
+        exit -1
+    fi
+
+    # read configures from .configure_im
+    data_path=$(sed -n '/^PBX_DATA_PATH/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    local_ip_address=$(sed -n '/^IP_ADDRESS/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    pbx_ip_address=$(sed -n '/^PBX_IP_ADDRESS/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    used_pbx_img=$(sed -n '/^PBX_IMG/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    pbx_extend_svc_type=$(sed -n '/^EXTEND_SVC_TYPE/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    pbx_extend_svc_name=$(sed -n '/^EXTEND_SVC_NAME/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    pbx_extend_svc_datapath=$(sed -n '/^EXTEND_SVC_DATAPATH/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+
+
+    echo "[upgrade]configures:"
+    echo ""
+    echo "datapath       : $data_path"
+    echo "ip(local)      : $local_ip_address"
+    echo "ip(pbx)        : $pbx_ip_address"
+    echo "pbx img        : used/$used_pbx_img new/$pbx_img"
+    echo "extend service : $pbx_extend_svc_type"
+    echo "extend name    : $pbx_extend_svc_name"
+    echo ""
+
+    # remove container
+    echo "[info]: start upgrade"
+    docker compose -f docker-compose.yml down -v
+    # remove docker image
+    docker image rm -f $used_pbx_img > /dev/null 2>&1
+    echo "[info]: the old service has been deleted"
+    # re-create
+    paras="-p ${data_path} -a $local_ip_address -x $pbx_ip_address -s $pbx_extend_svc_type -n $pbx_extend_svc_name"
+    if [ -z $pbx_img ]; then
+        paras="$paras -i $used_pbx_img"
+    else
+        paras="$paras -i $pbx_img"
+    fi
+
+    command="create run $paras"
+    $command
+
+    echo ""
+    echo "upgraded"
+    echo ""
+}
+
+echo "[warning] disable system auto update"
+if grep -q "Ubuntu" /etc/os-release; then
+    disable_upgrade
+elif grep -q "Debian" /etc/os-release; then
+    disable_upgrade
+fi
 
 
 case $1 in
@@ -476,6 +604,10 @@ start)
 
 rm)
     op $@
+    ;;
+
+upgrade)
+    upgrade $@
     ;;
 
 *)
