@@ -49,11 +49,10 @@ configFirewallPorts(){
 
 set_firewall(){
     configFirewallPorts
-    echo ""
     echo "[info]: configure firewall"
 
-    `systemctl stop ufw &> /dev/null` || true
-    `systemctl disable ufw &> /dev/null` || true
+    `systemctl stop ufw > /dev/null 2>&1` || true
+    `systemctl disable ufw > /dev/null 2>&1` || true
     systemctl enable firewalld
     systemctl start firewalld
     echo "[info]: enabled firewalld"
@@ -83,8 +82,7 @@ set_firewall(){
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
     echo "[info]: info firewalld service ${firewall_svc_name}:"
-    echo ""
-    firewall-cmd --info-service=${firewall_svc_name}
+    firewall-cmd --service=${firewall_svc_name} --permanent --get-ports
 }
 
 export_configure() {
@@ -172,14 +170,11 @@ services:
         condition: service_healthy
 FEOF
 
-    echo 
     echo "[info]: dumped configure file 'docker-compose.yml'"
 }
 
 create() {
-    echo ""
     echo "[info]: try to create trace server"
-    echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
 
@@ -276,7 +271,6 @@ create() {
     echo "    heplify img : $heplify_img"
     echo "    http port   : $http_port"
     echo "    capture port: $capture_port_2"
-    echo ""
 
     cat << EOF > .configure
 data_path       $data_path
@@ -293,7 +287,6 @@ EOF
         echo "[warn]: datapath $data_path/trace_server_postgresql not exist, try to create it"
         mkdir -p $data_path/trace_server_postgresql
         echo "[info]: $data_path created"
-        echo ""
     fi
 
     if [ -f $data_path/trace_server_postgresql/.trace_db_pass ] 
@@ -310,46 +303,34 @@ EOF
 
     echo $db_password > $data_path/trace_server_postgresql/.trace_db_pass
 
-    echo ""
     echo "[info]: created"
-    echo ""
 }
 
 status() {
-    echo ""
     echo "[info]: status all services"
-    echo ""
     docker compose ls -a
     docker compose ps -a
 }
 
 restart() {
-    echo ""
     echo "[info]: restart all services"
-    echo ""
     docker compose stop -t 300
     sleep 10
     docker compose start
 }
 
 start() {
-    echo ""
     echo "[info]: start all services"
-    echo ""
     docker compose start
 }
 
 stop() {
-    echo ""
     echo "[info]: stop all services"
-    echo ""
     docker compose stop
 }
 
 rm() {
-    echo ""
     echo "[info]: remove all services"
-    echo ""
     docker compose down
     docker volume rm `docker volume ls  -q | grep trace-data-db` || true
 }
