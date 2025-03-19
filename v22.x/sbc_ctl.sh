@@ -31,11 +31,10 @@ then
 fi
 
 set_firewall(){
-    echo ""
     echo "[info]: configure firewall"
 
-    `systemctl stop ufw &> /dev/null` || true
-    `systemctl disable ufw &> /dev/null` || true
+    `systemctl stop ufw > /dev/null 2>&1` || true
+    `systemctl disable ufw > /dev/null 2>&1` || true
     systemctl enable firewalld
     systemctl start firewalld
     echo "[info]: enabled firewalld"
@@ -65,8 +64,7 @@ set_firewall(){
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
     echo "[info]: info firewalld service ${firewall_svc_name}:"
-    echo ""
-    firewall-cmd --info-service=${firewall_svc_name}
+    firewall-cmd --service=${firewall_svc_name} --permanent --get-ports
 }
 
 config_sysctls() {
@@ -74,14 +72,13 @@ config_sysctls() {
     cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
 net.ipv4.ip_unprivileged_port_start=0
 EOF
-    sysctl -p
-    sysctl --system
+
+    `sysctl -p > /dev/null 2>&1` || true
+    `sysctl --system > /dev/null 2>&1` || true
 }
 
 create() {
-    echo ""
     echo "[info]: try to create sbc service"
-    echo ""
 
     set_firewall
 
@@ -118,16 +115,15 @@ create() {
     fi
 
     echo  "[info]: use datapath $data_path, img $sbc_img"
-    echo ""
 
-    docker pull $sbc_img
+    echo  "[info]: docker pull $sbc_img"
+    docker pull $sbc_img > /dev/null
 
     # check datapath whether exist
     if [ ! -d "$data_path/sbc" ]; then
         echo  "[warn]: datapath $data_path/sbc not exist, try to reate it"
         mkdir -p $data_path/sbc
         echo  "[info]: $data_path created"
-        echo ""
     fi
 
     # change directory mode
@@ -149,11 +145,8 @@ EOF
         -v /etc/localtime:/etc/localtime:ro  \
         $sbc_img
 
-    echo ""
     echo  "[info]: created"
-    echo ""
 }
-
 
 status() {
     # remove command firstly
@@ -173,9 +166,7 @@ status() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: status all services"
-        echo ""
         docker exec portsip.sbc supervisorctl status 
     else
         echo ""
@@ -203,16 +194,12 @@ restart() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: restart all services"
-        echo ""
         docker restart -t 300 portsip.sbc
         exit
     fi
 
-    echo ""
     echo "[info]: restart service $service_name"
-    echo ""
     docker exec portsip.sbc supervisorctl restart $service_name
 }
 
@@ -234,14 +221,10 @@ start() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: start all services"
-        echo ""
         docker start portsip.sbc
     else
-        echo ""
         echo "[info]: start service $service_name"
-        echo ""
         docker exec portsip.sbc supervisorctl start $service_name
     fi
 }
@@ -264,15 +247,11 @@ stop() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: stop all services"
-        echo ""
         docker stop -t 300 portsip.sbc
         exit
     fi
-    echo ""
     echo "[info]: stop service $service_name"
-    echo ""
     docker exec portsip.sbc supervisorctl stop $service_name
 }
 
@@ -280,9 +259,7 @@ rm() {
     # remove command firstly
     shift
 
-    echo ""
     echo "[info]: remove service sbc"
-    echo ""
 
     #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
     #firewall-cmd --reload
@@ -313,9 +290,7 @@ upgrade(){
     # get data path
     used_sbc_datapath=$(docker inspect -f '{{range .Mounts}}{{if gt (len .Source) 4}}{{if eq (slice .Source (slice .Source 3|len)) "sbc"}}{{slice .Source 0 (slice .Source 4|len)}} {{end}}{{end}}{{end}}' portsip.sbc)
     if [ -z "$used_sbc_datapath" ]; then
-        echo ""
         echo "[error]: data path is empty"
-        echo ""
         exit -1
     fi
     
@@ -325,9 +300,7 @@ upgrade(){
     # remove docker image
     docker image rm -f $used_sbc_img > /dev/null 2>&1
     # re-create
-    echo ""
     echo "[info]: start upgrade"
-    echo ""
     sbc_img=$new_sbc_img
     if [ -z $sbc_img ]; then
         sbc_img=$used_sbc_img
@@ -337,9 +310,7 @@ upgrade(){
         exit -1
     fi
     create run -i $sbc_img -p $used_sbc_datapath
-    echo ""
     echo "[info]: upgraded"
-    echo ""
 }
 
 disable_upgrade(){
