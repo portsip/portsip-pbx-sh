@@ -5,15 +5,12 @@ firewall_svc_name="portsip-sbc"
 firewall_predfined_ports="25000-34999/udp 5066/udp 5065/tcp 5067/tcp 5069/tcp 8882/tcp 8883/tcp 10443/tcp"
 
 create_help() {
-    echo
     echo  " command run options:"
     echo  "     -p <path>: required, sbc data path"
     echo  "     -i <docker image>: required, sbc docker image"
-    echo
 }
 
 command_help() {
-    echo
     echo  " use command:"
     echo  "     run"
     echo  "     status"
@@ -21,7 +18,6 @@ command_help() {
     echo  "     start"
     echo  "     stop"
     echo  "     rm"
-    echo 
 }
 
 if [ -z $1 ];
@@ -169,9 +165,7 @@ status() {
         echo "[info]: status all services"
         docker exec portsip.sbc supervisorctl status 
     else
-        echo ""
         echo "[info]: status service $service_name"
-        echo ""
         docker exec portsip.sbc supervisorctl status $service_name
     fi
 }

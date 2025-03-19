@@ -159,9 +159,7 @@ verify_parameters() {
         mkdir -p $data_path/pbx/im/storage
         chmod 755 $data_path/pbx/im
         chown -R 888:888 $data_path/pbx/im
-        echo ""
         echo "[info]: run as INTERNAL mode"
-        echo ""
     else
         # extend service
         if [ -z "$pbx_ip_address" ]; then
@@ -184,9 +182,7 @@ verify_parameters() {
             echo "[error]: Option -a and -A not specified"
             exit -1
         fi
-        echo ""
         echo "[info]: run as STANDALONE mode"
-        echo ""
     fi
 }
 
@@ -244,11 +240,10 @@ start_internal() {
 }
 
 set_firewall(){
-    echo ""
     echo "[info]: configure firewalld"
 
-    `systemctl stop ufw &> /dev/null` || true
-    `systemctl disable ufw &> /dev/null` || true
+    `systemctl stop ufw > /dev/null 2>&1` || true
+    `systemctl disable ufw > /dev/null 2>&1` || true
     systemctl enable firewalld
     systemctl start firewalld
     echo "[info]: enabled firewalld"
@@ -279,9 +274,7 @@ set_firewall(){
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
     echo "[info]: firewalld service ${firewall_svc_name}:"
-    echo ""
-    firewall-cmd --info-service=${firewall_svc_name}
-    echo ""
+    firewall-cmd --service=${firewall_svc_name}  --permanent --get-ports
 }
 
 config_sysctls() {
@@ -289,8 +282,9 @@ config_sysctls() {
     cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
 net.ipv4.ip_unprivileged_port_start=0
 EOF
-    sysctl -p
-    sysctl --system
+
+    `sysctl -p > /dev/null 2>&1` || true
+    `sysctl --system > /dev/null 2>&1` || true
 }
 
 export_configure_crt_or_up() {
@@ -479,16 +473,13 @@ start_extension(){
         echo "[warn]: the current data path $im_datapath does not exist, try to create it"
         mkdir -p "$im_datapath"
         echo "[info]: $im_datapath created"
-        echo ""
     fi
 
     # check db datapath whether exist
     if [ ! -d "$im_dbpath" ]; then
-        echo ""
         echo "[warn]: db datapath $im_dbpath not exist, try to create it"
         mkdir -p $im_dbpath
         echo "[info]: $im_dbpath created"
-        echo ""
     fi
 
     # read database password if exist
@@ -501,7 +492,8 @@ start_extension(){
     fi
 
     # get product version
-    docker image pull $im_img
+    echo "[info]: docker pull $im_img"
+    docker image pull $im_img > /dev/null
     new_version=$(export_production_version)
     if [ -z "$new_version" ]; then
         echo "[error]: not found label 'version' in the im image"
@@ -524,14 +516,10 @@ start_extension(){
         echo "[error]: init or upgrade env"
         exit -1
     fi
-    echo ""
     echo "[info]: initdt start "
-    echo ""
     docker compose -f ${im_compose_ini_file} exec initdt /usr/local/bin/initdt.sh -D /var/lib/portsip/pbx --pg-superuser-name postgres --pg-superuser-password ${db_password}
     local crtOrUpRet=$?
-    echo ""
     echo "[info]: initdt done"
-    echo ""
     docker compose -f ${im_compose_ini_file} down -v
     if [ $crtOrUpRet -ne 0 ]; then
         echo "[error]: init or upgrade"
@@ -558,9 +546,7 @@ start_extension(){
 }
 
 create() {
-    echo ""
     echo "[info]: try to create im service"
-    echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
 
@@ -587,7 +573,6 @@ create() {
     echo "db img    : $db_img"
     echo "token     : $im_token"
     echo "storage   : $storage"
-    echo ""
 
     # get product version
     docker image pull $im_img
@@ -621,9 +606,7 @@ EOF
     # check storage datapath whether exist
     if [ ! -z "$storage" ]; then
         if [ ! -d "$storage" ]; then
-            echo ""
             echo "[error]: storage datapath $storage not exist, exit"
-            echo ""
             exit -1
         else
             chmod 755 "$storage"
@@ -641,9 +624,7 @@ EOF
     # run extend service
     docker compose -f ${im_compose_file} up -d
 
-    echo ""
     echo "[info]: created"
-    echo ""
 }
 
 op() {
@@ -666,9 +647,7 @@ op() {
     fi
     cd $extend_svc_type
 
-    echo ""
     echo "[info]: ${operator} service $extend_svc_type"
-    echo ""
   
     case $operator in
     restart)
@@ -720,17 +699,13 @@ upgrade(){
     docker inspect portsip.instantmessage > /dev/null
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
-        echo ""
         echo "[error]: the resources that the im service depends on are lost."
-        echo ""
         exit -1
     fi
     cd $extend_svc_type
 
     if [ ! -f "$im_deploy_config_file" ]; then 
-        echo ""
         echo "[error]: the configures that the im service depends on are lost."
-        echo ""
         exit -1
     fi
 
@@ -749,9 +724,7 @@ upgrade(){
     token_idx=$(($token_idx+1))
     im_token=$(docker inspect -f "{{index .Args $token_idx}}" portsip.instantmessage)
     if [ -z $im_token ]; then
-        echo ""
         echo "[error]: failed to get im token"
-        echo ""
         exit -1
     fi
 
@@ -764,7 +737,6 @@ upgrade(){
     echo "db img    : $db_img"
     echo "token     : $im_token"
     echo "storage   : $storage"
-    echo ""
 
     # remove container
     echo "[info]: start upgrade"
@@ -806,9 +778,7 @@ upgrade(){
     command="create run $paras"
     $command
 
-    echo ""
     echo "[info]: upgraded"
-    echo ""
 }
 
 disable_upgrade(){
