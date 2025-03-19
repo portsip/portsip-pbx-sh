@@ -19,11 +19,10 @@ pbx_deploy_config_file=".configure_pbx"
 cd pbx
 
 set_firewall(){
-    echo ""
     echo "[info]: configure firewall"
 
-    `systemctl stop ufw &> /dev/null` || true
-    `systemctl disable ufw &> /dev/null` || true
+    `systemctl stop ufw > /dev/null 2>&1` || true
+    `systemctl disable ufw > /dev/null 2>&1` || true
     systemctl enable firewalld
     systemctl start firewalld
     echo "[info]: enabled firewalld"
@@ -53,8 +52,7 @@ set_firewall(){
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
     echo "[info]: info firewalld service ${firewall_svc_name}:"
-    echo ""
-    firewall-cmd --info-service=${firewall_svc_name}
+    firewall-cmd --service=${firewall_svc_name} --permanent --get-ports
 }
 
 config_sysctls() {
@@ -62,8 +60,8 @@ config_sysctls() {
     cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
 net.ipv4.ip_unprivileged_port_start=0
 EOF
-    sysctl -p || true
-    sysctl --system || true
+    `sysctl -p > /dev/null 2>&1` || true
+    `sysctl --system > /dev/null 2>&1` || true
 }
 
 export_pbx_production_version() {
@@ -600,7 +598,6 @@ FEOF
 FEOF
     fi
 
-    echo 
     echo "[info]: dumped configure file 'docker-compose-portsip-pbx.yml'"
 }
 
@@ -622,16 +619,12 @@ status() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: status all services"
-        echo ""
         docker compose -f docker-compose-portsip-pbx.yml ls -a
         docker compose -f docker-compose-portsip-pbx.yml ps -a
     else
         service_name=$(svc_name $service_name)
-        echo ""
         echo "[info]: status service $service_name"
-        echo ""
         docker compose -f docker-compose-portsip-pbx.yml ps $service_name
     fi
 }
@@ -654,9 +647,7 @@ restart() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: restart all services"
-        echo ""
         docker compose -f docker-compose-portsip-pbx.yml stop -t 300
         sleep 10
         docker compose -f docker-compose-portsip-pbx.yml start
@@ -664,9 +655,7 @@ restart() {
     fi
 
     service_name=$(svc_name $service_name)
-    echo ""
     echo "[info]: restart service $service_name"
-    echo ""
     case $service_name in
     database)
         docker compose -f docker-compose-portsip-pbx.yml stop -t 300
@@ -706,15 +695,11 @@ start() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: start all services"
-        echo ""
         docker compose -f docker-compose-portsip-pbx.yml start
     else
         service_name=$(svc_name $service_name)
-        echo ""
         echo "[info]: start service $service_name"
-        echo ""
         docker compose -f docker-compose-portsip-pbx.yml start $service_name
     fi
 }
@@ -737,16 +722,12 @@ stop() {
 
     # check parameters is exist
     if [ -z "$service_name" ]; then
-        echo ""
         echo "[info]: stop all services"
-        echo ""
         docker compose -f docker-compose-portsip-pbx.yml stop
         exit 0
     fi
     service_name=$(svc_name $service_name)
-    echo ""
     echo "[info]: stop service $service_name"
-    echo ""
     case $service_name in
     database)
         docker compose -f docker-compose-portsip-pbx.yml stop -t 100
@@ -780,8 +761,9 @@ rm() {
 
     #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
     #firewall-cmd --reload
-
+    echo "[info]: remove pbx service"
     docker compose -f docker-compose-portsip-pbx.yml down  -v
+    echo "[info]: removed"
 
     #docker volume rm `docker volume ls  -q | grep pbx-data` || true
     #docker volume rm `docker volume ls  -q | grep pbx-db` || true
@@ -855,21 +837,16 @@ services:
 
 FEOF
 
-    echo 
     echo "[info]: dumped init configure file 'docker-compose-portsip-pbx-init.yml'"
 }
 
 create() {
     #remove old
-    #echo ""
     #echo "[run] stop and remove old pbx"
-    #echo ""
     #rm
 
     # init or upgrade pbx
-    echo ""
     echo "[info]: try to deploy pbx service"
-    echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
 
@@ -936,24 +913,19 @@ create() {
         echo "[warn]: datapath $data_path/pbx not exist, try to create it"
         mkdir -p $data_path/pbx
         echo "[info]: $data_path created"
-        echo ""
     fi
 
     # check db datapath whether exist
     if [ ! -d "$data_path/postgresql" ]; then
-        echo ""
         echo "[warn]: db datapath $data_path/postgresql not exist, try to create it"
         mkdir -p $data_path/postgresql
         echo "[info]: $data_path created"
-        echo ""
     fi
 
     # check storage datapath whether exist
     if [ ! -z "$storage" ]; then
       if [ ! -d "$storage" ]; then
-          echo ""
           echo "[error]: storage datapath $storage not exist, exit"
-          echo ""
           exit -1
       else
           chmod 755 "$storage"
@@ -976,14 +948,12 @@ create() {
         pbx_pre_version=`head -n 1 $data_path/pbx/VERSION`
     fi
 
-    echo ""
     echo "[info]: variables"
     echo "    datapath: $data_path"
     echo "    ip      : $ip_address"
     echo "    pbx  img: $pbx_img"
     echo "    db   img: $db_img"
     echo "     storage: $storage"
-    echo ""
 
     # change directory mode
     chmod 755 $data_path
@@ -999,7 +969,8 @@ STORAGE=$storage
 EOF
 
     # get product version
-    docker image pull $pbx_img
+    echo "[info]: docker pull $pbx_img"
+    docker image pull $pbx_img > /dev/null
     pbx_new_version=$(export_pbx_production_version $pbx_img)
     if [ -z "$pbx_new_version" ]; then
         echo "[error]: not found label 'version' in the pbx image"
@@ -1023,12 +994,10 @@ EOF
         echo "[error]: init or upgrade env"
         exit -1
     fi
-    echo ""
     echo "[info]: initdt start "
     docker compose -f docker-compose-portsip-pbx-init.yml exec initdt /usr/local/bin/initdt.sh -D /var/lib/portsip/pbx --pg-superuser-name postgres --pg-superuser-password ${db_password}
     local crtOrUpRet=$?
     echo "[info]: initdt done"
-    echo ""
     docker compose -f docker-compose-portsip-pbx-init.yml down -v
     if [ $crtOrUpRet -ne 0 ]; then
         echo "[error]: init or upgrade"
@@ -1049,9 +1018,7 @@ EOF
     echo "[info]: start pbx service"
     docker compose -f docker-compose-portsip-pbx.yml up -d
 
-    echo ""
     echo "[info]: created"
-    echo ""
 }
 
 disable_upgrade(){
@@ -1081,9 +1048,7 @@ disable_upgrade(){
 }
 
 upgrade(){
-    echo ""
     echo "[info]: try to upgrade the pbx service"
-    echo ""
 
     shift
 
@@ -1103,9 +1068,7 @@ upgrade(){
     docker inspect portsip.callmanager > /dev/null
 
     if [ ! -f "$pbx_deploy_config_file" ]; then 
-        echo ""
         echo "[error]: the configures that the pbx service depends on are lost."
-        echo ""
         exit -1
     fi
 
@@ -1117,14 +1080,12 @@ upgrade(){
     db_password=$(sed -n '/^DB_PASSWORD/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     storage=$(sed -n '/^STORAGE/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
 
-    echo ""
     echo "[info]: variables"
     echo "    datapath: $data_path"
     echo "    ip      : $ip_address"
     echo "    pbx  img: used/$pbx_img new/$new_pbx_img"
     echo "    db   img: $db_img"
     echo "     storage: $storage"
-    echo ""
 
     # remove container
     echo "[info]: start upgrade"
@@ -1135,7 +1096,7 @@ upgrade(){
     if [ ! -z "$new_pbx_img" ]; then
         pbx_img="$new_pbx_img"
     fi
-    if [ -z $pbx_img]; then
+    if [ -z $pbx_img ]; then
         echo "[error]: unknown the docker image of pbx"
         exit -1
     fi
@@ -1148,9 +1109,7 @@ upgrade(){
     echo "$command"
     $command
 
-    echo ""
     echo "[info]: upgraded"
-    echo ""
 }
 
 if grep -q "Ubuntu" /etc/os-release; then
