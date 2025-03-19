@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-if [ -z $1 ];
-then 
-    echo "=> need more parameters <="
+if [ -z $1 ]; then 
+    echo "[error]: unknown command"
     exit -1
 fi
 
@@ -82,7 +81,7 @@ is_production_version_less_than_22_0() {
 }
 
 parse_cmd_parameters() {
-    echo "args:$@"
+    echo "[info]: args $@"
     
     while getopts f:d:p:a:A:x:i:t:E option
     do 
@@ -121,17 +120,17 @@ parse_cmd_parameters() {
 verify_parameters() {
         # check parameters is exist
     if [ -z "$data_path" ]; then
-        echo "\t Option -p not specified"
+        echo "[error]: Option -p not specified"
         exit -1
     fi
 
     if [ -z "$im_img" ]; then
-        echo "\t Option -i not specified"
+        echo "[error]: Option -i not specified"
         exit -1
     fi
 
     if [ -z "$im_token" ]; then
-        echo "\t Option -t not specified"
+        echo "[error]: Option -t not specified"
         exit -1
     fi
 
@@ -142,51 +141,51 @@ verify_parameters() {
         # make sure pbx already running on this host
         ret=$(docker compose ls -a | grep pbx | wc -l)
         if [ $ret -ne 1 ]; then
-            echo "\t pbx not deployed on this host(containers)"
+            echo "[error]: pbx not deployed on this host(containers)"
             exit -1
         fi
         if [ ! -d "$data_path/pbx" ]; then
-            echo "\t pbx not deployed on this host(datapath)"
+            echo "[error]: pbx not deployed on this host(datapath)"
             exit -1
         fi
         if [ ! -d "$data_path/postgresql" ]; then
-            echo "\t pbx not deployed on this host(db)"
+            echo "[error]: pbx not deployed on this host(db)"
             exit -1
         fi
         if [ ! -f "$data_path/pbx/system.ini" ]; then 
-            echo "\t pbx not deployed on this host(configure)"
+            echo "[error]: pbx not deployed on this host(configure)"
             exit -1
         fi
         mkdir -p $data_path/pbx/im/storage
         chmod 755 $data_path/pbx/im
         chown -R 888:888 $data_path/pbx/im
         echo ""
-        echo "\t run as INTERNAL mode"
+        echo "[info]: run as INTERNAL mode"
         echo ""
     else
         # extend service
         if [ -z "$pbx_ip_address" ]; then
-            echo "\t Option -x not specified"
+            echo "[error]: Option -x not specified"
             exit -1
         fi
 
         if [ -z "$db_img" ]; then
-            echo "\t Option -d not specified"
+            echo "[error]: Option -d not specified"
             exit -1
         fi
         
         ret=$(docker compose ls -a -q | grep pbx | wc -l)
         if [ $ret -ne 0 ]; then
-            echo "\t already exist pbx on this host(containers)"
+            echo "[error]: already exist pbx on this host(containers)"
             exit -1
         fi
 
         if [ -z "$local_pri_ip_address" ] && [ -z "$local_pub_ip_address" ]; then
-            echo "\t Option -a and -A not specified"
+            echo "[error]: Option -a and -A not specified"
             exit -1
         fi
         echo ""
-        echo "\t run as STANDALONE mode"
+        echo "[info]: run as STANDALONE mode"
         echo ""
     fi
 }
@@ -239,24 +238,20 @@ FEOF
 }
 
 start_internal() {
-    echo 
-    echo "export internal configure file '${im_compose_file}'"
-
     export_configure_internal
 
-    echo "done"
-    echo ""
+    echo "[info]: dumped internal configure file '${im_compose_file}'"
 }
 
 set_firewall(){
     echo ""
-    echo "[firewall] Configure firewall"
+    echo "[info]: configure firewalld"
 
     `systemctl stop ufw &> /dev/null` || true
     `systemctl disable ufw &> /dev/null` || true
     systemctl enable firewalld
     systemctl start firewalld
-    echo "[firewall] enabled firewalld"
+    echo "[info]: enabled firewalld"
 
     ports=
     pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
@@ -283,11 +278,10 @@ set_firewall(){
     firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
-    echo "[firewall] info service ${firewall_svc_name}:"
+    echo "[info]: firewalld service ${firewall_svc_name}:"
     echo ""
     firewall-cmd --info-service=${firewall_svc_name}
     echo ""
-    echo "[firewall] done"
 }
 
 config_sysctls() {
@@ -300,9 +294,6 @@ EOF
 }
 
 export_configure_crt_or_up() {
-    echo 
-    echo "[ini-cfg] export configure file '${im_compose_ini_file}'"
-
     cat << FEOF > ${im_compose_ini_file}
 
 volumes:
@@ -357,14 +348,10 @@ services:
 
 FEOF
 
-    echo "[ini-cfg] done"
-    echo ""
+    echo "[info] dumped ini configure file '${im_compose_ini_file}'"
 }
 
 export_configure_extension() {
-    echo 
-    echo "[cfg] export configure file '${im_compose_file}'"
-
     webserver_command="\"/usr/local/bin/websrv\", \"serve\", \"-n\", \"websrv\", \"-D\",\"/var/lib/portsip/pbx\""
 
     
@@ -472,8 +459,7 @@ FEOF
 FEOF
     fi
 
-    echo "[cfg] done"
-    echo ""
+    echo "[info]: dumped configure file '${im_compose_file}'"
 }
 
 start_extension(){
@@ -490,18 +476,18 @@ start_extension(){
 
     # check datapath whether exist
     if [ ! -d "$im_datapath" ]; then
-        echo "the current data path $im_datapath does not exist, try to create it"
+        echo "[warn]: the current data path $im_datapath does not exist, try to create it"
         mkdir -p "$im_datapath"
-        echo "created"
+        echo "[info]: $im_datapath created"
         echo ""
     fi
 
     # check db datapath whether exist
     if [ ! -d "$im_dbpath" ]; then
         echo ""
-        echo "[run] db datapath $im_dbpath not exist, try to create it"
+        echo "[warn]: db datapath $im_dbpath not exist, try to create it"
         mkdir -p $im_dbpath
-        echo "[run] created"
+        echo "[info]: $im_dbpath created"
         echo ""
     fi
 
@@ -518,13 +504,13 @@ start_extension(){
     docker image pull $im_img
     new_version=$(export_production_version)
     if [ -z "$new_version" ]; then
-        echo "[run] FAILED: not found label 'version' in the im image"
+        echo "[error]: not found label 'version' in the im image"
         exit -1
     fi
     if [ -z "$pre_version" ]; then
-        echo "[run] try to create im"
+        echo "[info]: try to create im"
     else
-        echo "[run] upgrade from $pre_version to $new_version"
+        echo "[info]: upgrade from $pre_version to $new_version"
     fi
 
     # init or upgrade data
@@ -535,18 +521,20 @@ start_extension(){
     local crtOrUpRetEnv=$?
     if [ $crtOrUpRetEnv -ne 0 ]; then
         docker compose -f ${im_compose_ini_file} down -v
-        echo "[run] FAILED: init or upgrade env"
+        echo "[error]: init or upgrade env"
         exit -1
     fi
     echo ""
-    echo "[run] ===> initdt start "
+    echo "[info]: initdt start "
+    echo ""
     docker compose -f ${im_compose_ini_file} exec initdt /usr/local/bin/initdt.sh -D /var/lib/portsip/pbx --pg-superuser-name postgres --pg-superuser-password ${db_password}
     local crtOrUpRet=$?
-    echo "[run] ===> initdt done"
+    echo ""
+    echo "[info]: initdt done"
     echo ""
     docker compose -f ${im_compose_ini_file} down -v
     if [ $crtOrUpRet -ne 0 ]; then
-        echo "[run] FAILED: init or upgrade"
+        echo "[error]: init or upgrade"
         exit -1
     fi
 
@@ -554,9 +542,9 @@ start_extension(){
 
     # succeed init or upgrade data
     if [ -z "$pre_version" ]; then
-        echo "[run] succeed init data"
+        echo "[info]: succeed init data"
     else
-        echo "[run] succeed upgrade data"
+        echo "[info]: succeed upgrade data"
     fi
 
     chmod 755 $im_dbpath
@@ -571,7 +559,7 @@ start_extension(){
 
 create() {
     echo ""
-    echo "==> try to create im service <=="
+    echo "[info]: try to create im service"
     echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
@@ -590,7 +578,7 @@ create() {
     fi
     cd $extend_svc_type
 
-    echo ""
+    echo "[info]: variables"
     echo "datapath  : $data_path"
     echo "ip(pri)   : $local_pri_ip_address"
     echo "ip(pub)   : $local_pub_ip_address"
@@ -605,15 +593,15 @@ create() {
     docker image pull $im_img
     production_version=$(export_production_version)
     if [ -z "$production_version" ]; then
-        echo "no 'version' information found in the docker image"
+        echo "[error]: no 'version' information found in the docker image"
         exit -1
     fi
-    echo "current version $production_version"
+    echo "[info]: current version $production_version"
 
     local ret=$(is_production_version_less_than_22_0)
     # ret: 1 for success and 0 for failure
     if [ $ret -eq 1 ]; then
-      echo "[error] version < 22.0.0"
+      echo "[error]: version < 22.0.0"
       exit -1
     fi
 
@@ -634,7 +622,7 @@ EOF
     if [ ! -z "$storage" ]; then
         if [ ! -d "$storage" ]; then
             echo ""
-            echo "[run] storage datapath $storage not exist, exit"
+            echo "[error]: storage datapath $storage not exist, exit"
             echo ""
             exit -1
         else
@@ -654,7 +642,7 @@ EOF
     docker compose -f ${im_compose_file} up -d
 
     echo ""
-    echo "done"
+    echo "[info]: created"
     echo ""
 }
 
@@ -668,18 +656,18 @@ op() {
 
     # check parameters is exist
     if [ -z "$extend_svc_type" ]; then
-        echo "Option -s not specified"
+        echo "[error]: option -s not specified"
         exit -1
     fi
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
-        echo "no service configuration found"
+        echo "[error]: no service configuration found, not exist directory ${extend_svc_type}"
         exit -1
     fi
     cd $extend_svc_type
 
     echo ""
-    echo "${operator} service $extend_svc_type"
+    echo "[info]: ${operator} service $extend_svc_type"
     echo ""
   
     case $operator in
@@ -705,7 +693,11 @@ op() {
     rm)
         docker compose -f ${im_compose_file} down -v
         ;;
-
+    
+    *)
+        echo "[error]: unknown command $operator"
+        exit -1
+        ;;
     esac
 }
 
@@ -763,7 +755,7 @@ upgrade(){
         exit -1
     fi
 
-    echo "configures:"
+    echo "[info]: variables"
     echo "datapath  : $data_path"
     echo "ip(pri)   : $local_pri_ip_address"
     echo "ip(pub)   : $local_pub_ip_address"
@@ -786,11 +778,14 @@ upgrade(){
         paras="-E "
     fi
     paras="${paras}-p ${data_path}"
-    if [ -z "$new_im_img" ]; then
-        paras="$paras -i $im_img"
-    else
-        paras="$paras -i $new_im_img"
+    if [ ! -z "$new_im_img" ]; then
+        im_img="$new_im_img"
     fi
+    if [ -z $im_img ]; then
+        echo "[error]: unknown the docker image of im"
+        exit -1
+    fi
+    paras="$paras -i $im_img"
     paras="${paras} -t ${im_token}"
     if [ ! -z $storage ]; then
         paras="$paras -f $storage"
@@ -812,7 +807,7 @@ upgrade(){
     $command
 
     echo ""
-    echo "upgraded"
+    echo "[info]: upgraded"
     echo ""
 }
 
@@ -823,7 +818,7 @@ disable_upgrade(){
     systemctl mask unattended-upgrades  > /dev/null 2>&1 || true
     apt remove -y unattended-upgrades  > /dev/null 2>&1 || true
 
-    echo "removed unattended-upgrades"
+    #echo "[info]: removed unattended-upgrades"
 
     # disable  apt daily
     systemctl stop apt-daily.timer  > /dev/null 2>&1 || true
@@ -839,15 +834,16 @@ disable_upgrade(){
     systemctl disable apt-daily-upgrade.service  > /dev/null 2>&1 || true
     systemctl mask apt-daily-upgrade.service  > /dev/null 2>&1 || true
 
-    echo "disabled apt-daily-upgrade apt-daily"
+    #echo "[info]: disabled apt-daily-upgrade apt-daily"
 }
 
-echo "[warning] disable system auto update"
 if grep -q "Ubuntu" /etc/os-release; then
     disable_upgrade
 elif grep -q "Debian" /etc/os-release; then
     disable_upgrade
 fi
+
+echo "[warn]: disabled system auto update"
 
 case $1 in
 run)
@@ -879,6 +875,6 @@ upgrade)
     ;;
 
 *)
-    echo "command error"
+    echo "[error]: unknown command $1"
     ;;
 esac

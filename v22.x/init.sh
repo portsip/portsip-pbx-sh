@@ -13,7 +13,7 @@ scriptClusterCtlUrl="$url/cluster_ctl.sh"
 scriptTraceCtlUrl="$url/trace_ctl.sh"
 
 if [ ! -d "$workspace" ]; then
-    echo "workspace $workspace does not exist."
+    echo "[warn]: workspace $workspace does not exist."
     mkdir -p $workspace
 fi
 
@@ -28,26 +28,27 @@ rm -rf $workspace/cluster_ctl.sh || true
 rm -rf $workspace/trace_ctl.sh || true
 
 # cache scripts
-echo "download $scriptInstallDockerUrl => $workspace/install_docker.sh"
+echo "[info]: download $scriptInstallDockerUrl => $workspace/install_docker.sh"
 curl $scriptInstallDockerUrl -o $workspace/install_docker.sh
 
-echo "download $scriptPbxCtlUrl => $workspace/pbx_ctl.sh"
+echo "[info]: download $scriptPbxCtlUrl => $workspace/pbx_ctl.sh"
 curl $scriptPbxCtlUrl -o $workspace/pbx_ctl.sh
 
-echo "download $scriptSbcCtlUrl => $workspace/sbc_ctl.sh"
+echo "[info]: download $scriptSbcCtlUrl => $workspace/sbc_ctl.sh"
 curl $scriptSbcCtlUrl -o $workspace/sbc_ctl.sh
 
-echo "download $scriptImCtlUrl => $workspace/im_ctl.sh"
+echo "[info]: download $scriptImCtlUrl => $workspace/im_ctl.sh"
 curl $scriptImCtlUrl -o $workspace/im_ctl.sh
 
-echo "download $scriptClusterCtlUrl => $workspace/cluster_ctl.sh"
+echo "[info]: download $scriptClusterCtlUrl => $workspace/cluster_ctl.sh"
 curl $scriptClusterCtlUrl -o $workspace/cluster_ctl.sh
 
-echo "download $scriptTraceCtlUrl => $workspace/trace_ctl.sh"
+echo "[info]: download $scriptTraceCtlUrl => $workspace/trace_ctl.sh"
 curl $scriptTraceCtlUrl -o $workspace/trace_ctl.sh
 
 echo ""
-echo "All scripts are cached in directory $workspace."
+echo "[info]: All scripts are cached in directory $workspace."
+echo ""
 echo "Usage(pbx):"
 echo "  cd $workspace && sudo /bin/sh pbx_ctl.sh run -p [data storage] -a [ip] -i [pbx image] -f [extend file storage]"
 echo "Usage(sbc):"
@@ -61,5 +62,5 @@ echo "Usage(trace):"
 echo "  cd $workspace && sudo /bin/sh trace_ctl.sh run -p [data storage] -k [rotation days] -l [http port] -z [capture port]"
 echo ""
 echo ""
-echo "Successfully initialized. Please deploy the service according to the manual."
+echo "[info]: Successfully initialized. Please deploy the service according to the manual."
 echo ""

@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-if [ -z $1 ];
-then 
-    echo "=> need more parameters <="
+if [ -z $1 ]; then 
+    echo "[error]: unknown command"
     exit -1
 fi
 
@@ -74,14 +73,14 @@ verify_svc_type() {
     vr-server-only)
         ;;
     *)
-        echo "service type ${pbx_extend_svc_type} is not supported."
-        echo " NOTE: please use one of queue-server-only,media-server-only,meeting-server-only,vr-server-only."
+        echo "[error]: service type ${pbx_extend_svc_type} is not supported."
+        echo "         only support queue-server-only,media-server-only,meeting-server-only,vr-server-only."
         exit -1
     esac
 }
 
 parse_cmd_parameters() {
-    echo "args:$@"
+    echo "[info]: args $@"
     
     while getopts p:a:x:i:s:n: option
     do 
@@ -112,27 +111,27 @@ parse_cmd_parameters() {
 verify_parameters() {
         # check parameters is exist
     if [ -z "$data_path" ]; then
-        echo "\t Option -p not specified"
+        echo "[error]: option -p not specified"
         exit -1
     fi
     if [ -z "$local_ip_address" ]; then
-        echo "\t Option -a not specified"
+        echo "[error]: option -a not specified"
         exit -1
     fi
     if [ -z "$pbx_ip_address" ]; then
-        echo "\t Option -x not specified"
+        echo "[error]: option -x not specified"
         exit -1
     fi
     if [ -z "$pbx_img" ]; then
-        echo "\t Option -i not specified"
+        echo "[error]: option -i not specified"
         exit -1
     fi
     if [ -z "$pbx_extend_svc_type" ]; then
-        echo "\t Option -s not specified"
+        echo "[error]: option -s not specified"
         exit -1
     fi
     if [ -z "$pbx_extend_svc_name" ]; then
-        echo "\t Option -n not specified"
+        echo "[error]: option -n not specified"
         exit -1
     fi
 
@@ -140,9 +139,6 @@ verify_parameters() {
 }
 
 export_configure() {
-    echo 
-    echo "export configure file 'docker-compose.yml'"
-
     local volume_name="$pbx_extend_svc_type"
     local extend_svc_name="$pbx_extend_svc_type"
 
@@ -238,8 +234,7 @@ VREOF
 
     esac
 
-    echo "done"
-    echo ""
+    echo "[info]: dumped configure file 'docker-compose.yml'"
 }
 
 initdt() {
@@ -273,13 +268,13 @@ configFirewallPorts(){
 set_firewall(){
     configFirewallPorts
     echo ""
-    echo "[firewall] Configure firewall"
+    echo "[info]: configure firewall"
 
     `systemctl stop ufw &> /dev/null` || true
     `systemctl disable ufw &> /dev/null` || true
     systemctl enable firewalld
     systemctl start firewalld
-    echo "[firewall] enabled firewalld"
+    echo "[info]: enabled firewalld"
 
     ports=
     pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
@@ -305,11 +300,9 @@ set_firewall(){
     firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
-    echo "[firewall] info service ${firewall_svc_name}:"
+    echo "[info]: info firewalld service ${firewall_svc_name}:"
     echo ""
     firewall-cmd --info-service=${firewall_svc_name}
-    echo ""
-    echo "[firewall] done"
 }
 
 config_sysctls() {
@@ -323,7 +316,7 @@ EOF
 
 create() {
     echo ""
-    echo "==> try to create extend service <=="
+    echo "[info]: try to create extend service"
     echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
@@ -344,21 +337,22 @@ create() {
     fi
     cd $pbx_extend_svc_type
 
+    echo "[info]: variables"
     echo ""
-    echo "datapath       : $data_path"
-    echo "ip(local)      : $local_ip_address"
-    echo "ip(pbx)        : $pbx_ip_address"
-    echo "pbx img        : $pbx_img"
-    echo "extend service : $pbx_extend_svc_type"
-    echo "extend name    : $pbx_extend_svc_name"
+    echo "  datapath       : $data_path"
+    echo "  ip(local)      : $local_ip_address"
+    echo "  ip(pbx)        : $pbx_ip_address"
+    echo "  pbx img        : $pbx_img"
+    echo "  extend service : $pbx_extend_svc_type"
+    echo "  extend name    : $pbx_extend_svc_name"
     echo ""
 
     # check if the data path exists
     pbx_extend_svc_datapath="$data_path/$pbx_extend_svc_type"
     if [ ! -d "$pbx_extend_svc_datapath" ]; then
-        echo "the current data path $pbx_extend_svc_datapath does not exist, try to create it"
+        echo "[warn]: the current data path $pbx_extend_svc_datapath does not exist, try to create it"
         mkdir -p "$pbx_extend_svc_datapath"
-        echo "created"
+        echo "[info]: $pbx_extend_svc_datapath created"
         echo ""
     fi
 
@@ -377,15 +371,15 @@ EOF
     docker image pull $pbx_img
     pbx_production_version=$(export_pbx_production_version)
     if [ -z "$pbx_production_version" ]; then
-        echo "no 'version' information found in the docker image"
+        echo "[error]: no 'version' information found in the docker image"
         exit -1
     fi
-    echo "current pbx version $pbx_production_version"
+    echo "[info]: current pbx version $pbx_production_version"
     # pbx >= 16.1
     local ret=$(is_pbx_production_version_less_than_22_0)
     # ret: 1 for success and 0 for failure
     if [ $ret -eq 1 ]; then
-      echo "[error] pbx version < 22.0.0"
+      echo "[error]: pbx version < 22.0.0"
       exit -1
     fi
 
@@ -396,7 +390,7 @@ EOF
     docker compose -f docker-compose.yml up -d
 
     echo ""
-    echo "done"
+    echo "[info]: created"
     echo ""
 }
 
@@ -410,18 +404,18 @@ op() {
 
     # check parameters is exist
     if [ -z "$pbx_extend_svc_type" ]; then
-        echo "Option -s not specified"
+        echo "[error]: option -s not specified"
         exit -1
     fi
     # change work directory
     if [ ! -d "./$pbx_extend_svc_type" ]; then
-        echo "no service configuration found"
+        echo "[error]: no service configuration found"
         exit -1
     fi
     cd $pbx_extend_svc_type
 
     echo ""
-    echo "${operator} service $pbx_extend_svc_type"
+    echo "[info]: ${operator} service $pbx_extend_svc_type"
     echo ""
   
     case $operator in
@@ -451,7 +445,9 @@ op() {
         docker compose -f docker-compose.yml down -v
         #docker volume rm `docker volume ls  -q | grep ${volume_name}` || true
         ;;
-
+    *)
+        echo "[error]: unknown command $operator"
+        exit -1
     esac
 }
 
@@ -462,7 +458,7 @@ disable_upgrade(){
     systemctl mask unattended-upgrades  > /dev/null 2>&1 || true
     apt remove -y unattended-upgrades  > /dev/null 2>&1 || true
 
-    echo "removed unattended-upgrades"
+    #echo "removed unattended-upgrades"
 
     # disable  apt daily
     systemctl stop apt-daily.timer  > /dev/null 2>&1 || true
@@ -478,7 +474,7 @@ disable_upgrade(){
     systemctl disable apt-daily-upgrade.service  > /dev/null 2>&1 || true
     systemctl mask apt-daily-upgrade.service  > /dev/null 2>&1 || true
 
-    echo "disabled apt-daily-upgrade apt-daily"
+    #echo "disabled apt-daily-upgrade apt-daily"
 }
 
 service_container_name(){
@@ -541,14 +537,14 @@ upgrade(){
     pbx_extend_svc_datapath=$(sed -n '/^EXTEND_SVC_DATAPATH/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
 
 
-    echo "[upgrade]configures:"
+    echo "[info]: variables"
     echo ""
-    echo "datapath       : $data_path"
-    echo "ip(local)      : $local_ip_address"
-    echo "ip(pbx)        : $pbx_ip_address"
-    echo "pbx img        : used/$used_pbx_img new/$pbx_img"
-    echo "extend service : $pbx_extend_svc_type"
-    echo "extend name    : $pbx_extend_svc_name"
+    echo "  datapath       : $data_path"
+    echo "  ip(local)      : $local_ip_address"
+    echo "  ip(pbx)        : $pbx_ip_address"
+    echo "  pbx img        : used/$used_pbx_img new/$pbx_img"
+    echo "  extend service : $pbx_extend_svc_type"
+    echo "  extend name    : $pbx_extend_svc_name"
     echo ""
 
     # remove container
@@ -560,26 +556,29 @@ upgrade(){
     # re-create
     paras="-p ${data_path} -a $local_ip_address -x $pbx_ip_address -s $pbx_extend_svc_type -n $pbx_extend_svc_name"
     if [ -z $pbx_img ]; then
-        paras="$paras -i $used_pbx_img"
-    else
-        paras="$paras -i $pbx_img"
+        pbx_img="$used_pbx_img"
+    fi
+    if [ -z $pbx_img ]; then
+        echo "[error]: unknown the docker image of pbx"
+        exit -1
     fi
 
+    paras="$paras -i $pbx_img"
     command="create run $paras"
     $command
 
     echo ""
-    echo "upgraded"
+    echo "[info]: upgraded"
     echo ""
 }
 
-echo "[warning] disable system auto update"
 if grep -q "Ubuntu" /etc/os-release; then
     disable_upgrade
 elif grep -q "Debian" /etc/os-release; then
     disable_upgrade
 fi
 
+echo "[warn]: disabled system auto update"
 
 case $1 in
 run)
@@ -611,6 +610,6 @@ upgrade)
     ;;
 
 *)
-    echo "command error"
+    echo "[error]: unknown command $1"
     ;;
 esac

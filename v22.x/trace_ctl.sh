@@ -33,7 +33,7 @@ firewall_predfined_ports=
 
 if [ -z $1 ];
 then 
-    echo "[op] need parameters"
+    echo "[error]: unknown command"
     exit -1
 fi
 
@@ -50,13 +50,13 @@ configFirewallPorts(){
 set_firewall(){
     configFirewallPorts
     echo ""
-    echo "[firewall] Configure firewall"
+    echo "[info]: configure firewall"
 
     `systemctl stop ufw &> /dev/null` || true
     `systemctl disable ufw &> /dev/null` || true
     systemctl enable firewalld
     systemctl start firewalld
-    echo "[firewall] enabled firewalld"
+    echo "[info]: enabled firewalld"
 
     ports=
     pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
@@ -82,17 +82,12 @@ set_firewall(){
     firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
-    echo "[firewall] info service ${firewall_svc_name}:"
+    echo "[info]: info firewalld service ${firewall_svc_name}:"
     echo ""
     firewall-cmd --info-service=${firewall_svc_name}
-    echo ""
-    echo "[firewall] done"
 }
 
 export_configure() {
-    echo 
-    echo "[config] export configure file 'docker-compose.yml'"
-
     cat << FEOF > docker-compose.yml
 
 volumes:
@@ -177,13 +172,13 @@ services:
         condition: service_healthy
 FEOF
 
-    echo "[config] done"
-    echo ""
+    echo 
+    echo "[info]: dumped configure file 'docker-compose.yml'"
 }
 
 create() {
     echo ""
-    echo "[run] try to create trace server"
+    echo "[info]: try to create trace server"
     echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
@@ -226,54 +221,54 @@ create() {
     done
 
     if [ -z "$db_password" ]; then
-        echo "[run] Password is empty"
+        echo "[error]: Password is empty"
         exit -1
     fi
 
     # check parameters is exist
     if [ -z "$data_path" ]; then
-        echo "[run] data path is empty(used default /var/lib/portsip)"
+        echo "[info]: data path is empty(used default /var/lib/portsip)"
         data_path=/var/lib/portsip
     fi
 
     if [ -z "$data_drop_days" ]; then
-        echo "[run] data drop days is empty(used default 5)"
+        echo "[info]: data drop days is empty(used default 5)"
         data_drop_days=5
     fi
 
     if [ -z "$db_img" ]; then
-        echo "[run] db image is empty(used default portsip/trace-server:postgres11-alpine)"
+        echo "[info]: db image is empty(used default portsip/trace-server:postgres11-alpine)"
         db_img=portsip/trace-server:postgres11-alpine
     fi
 
     if [ -z "$webapp_img" ]; then
-        echo "[run] webapp image is empty(used default portsip/trace-server:webapp-16)"
+        echo "[info]: webapp image is empty(used default portsip/trace-server:webapp-16)"
         webapp_img=portsip/trace-server:webapp-16
     fi
 
     if [ -z "$heplify_img" ]; then
-        echo "[run] heplify server image is empty(used default portsip/trace-server:heplify-16)"
+        echo "[info]: heplify server image is empty(used default portsip/trace-server:heplify-16)"
         heplify_img=portsip/trace-server:heplify-16
     fi
 
     if [ -z "$http_port" ]; then
-        echo "[run] http listen port is empty(used default 9080)"
+        echo "[info]: http listen port is empty(used default 9080)"
         http_port=9080
     fi
 
     if [ -z "$capture_port_1" ]; then
-        echo "[run] HEPLIFYSERVER_HEPADDR is empty(used default 9060)"
+        echo "[info]: HEPLIFYSERVER_HEPADDR is empty(used default 9060)"
         capture_port_1=9060
     fi
 
     if [ -z "$capture_port_2" ]; then
-        echo "[run] HEPLIFYSERVER_HEPTCPADDR is empty(used default 9061)"
+        echo "[info]: HEPLIFYSERVER_HEPTCPADDR is empty(used default 9061)"
         capture_port_2=9061
     fi
 
     set_firewall
 
-    echo "[run] parameters :"
+    echo "[info]: variables"
     echo "    datapath    : $data_path"
     echo "    drop(day)   : $data_drop_days"
     echo "    db img      : $db_img"
@@ -295,9 +290,9 @@ EOF
 
     # check datapath whether exist
     if [ ! -d "$data_path/trace_server_postgresql" ]; then
-        echo "[run] datapath $data_path/trace_server_postgresql not exist, try to create it"
+        echo "[warn]: datapath $data_path/trace_server_postgresql not exist, try to create it"
         mkdir -p $data_path/trace_server_postgresql
-        echo "[run] created"
+        echo "[info]: $data_path created"
         echo ""
     fi
 
@@ -316,14 +311,13 @@ EOF
     echo $db_password > $data_path/trace_server_postgresql/.trace_db_pass
 
     echo ""
-    echo "[run] done"
+    echo "[info]: created"
     echo ""
 }
 
-
 status() {
     echo ""
-    echo "[op] status all services"
+    echo "[info]: status all services"
     echo ""
     docker compose ls -a
     docker compose ps -a
@@ -331,7 +325,7 @@ status() {
 
 restart() {
     echo ""
-    echo "[op] restart all services"
+    echo "[info]: restart all services"
     echo ""
     docker compose stop -t 300
     sleep 10
@@ -340,21 +334,21 @@ restart() {
 
 start() {
     echo ""
-    echo "[op] start all services"
+    echo "[info]: start all services"
     echo ""
     docker compose start
 }
 
 stop() {
     echo ""
-    echo "[op] stop all services"
+    echo "[info]: stop all services"
     echo ""
     docker compose stop
 }
 
 rm() {
     echo ""
-    echo "[op] stop all services"
+    echo "[info]: remove all services"
     echo ""
     docker compose down
     docker volume rm `docker volume ls  -q | grep trace-data-db` || true
@@ -386,6 +380,6 @@ rm)
     ;;
 
 *)
-    echo "[op] error command"
+    echo "[error]: unknown command $1"
     ;;
 esac

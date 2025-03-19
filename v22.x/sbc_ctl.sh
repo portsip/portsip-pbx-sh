@@ -6,21 +6,21 @@ firewall_predfined_ports="25000-34999/udp 5066/udp 5065/tcp 5067/tcp 5069/tcp 88
 
 create_help() {
     echo
-    echo  "\t command run options:"
-    echo  "\t     -p <path>: required, sbc data path"
-    echo  "\t     -i <docker image>: required, sbc docker image"
+    echo  " command run options:"
+    echo  "     -p <path>: required, sbc data path"
+    echo  "     -i <docker image>: required, sbc docker image"
     echo
 }
 
 command_help() {
     echo
-    echo  "\t use command:"
-    echo  "\t     run"
-    echo  "\t     status"
-    echo  "\t     restart"
-    echo  "\t     start"
-    echo  "\t     stop"
-    echo  "\t     rm"
+    echo  " use command:"
+    echo  "     run"
+    echo  "     status"
+    echo  "     restart"
+    echo  "     start"
+    echo  "     stop"
+    echo  "     rm"
     echo 
 }
 
@@ -32,13 +32,13 @@ fi
 
 set_firewall(){
     echo ""
-    echo "[firewall] Configure firewall"
+    echo "[info]: configure firewall"
 
     `systemctl stop ufw &> /dev/null` || true
     `systemctl disable ufw &> /dev/null` || true
     systemctl enable firewalld
     systemctl start firewalld
-    echo "[firewall] enabled firewalld"
+    echo "[info]: enabled firewalld"
 
     ports=
     pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
@@ -64,11 +64,9 @@ set_firewall(){
     firewall-cmd -q --permanent --add-service=${firewall_svc_name} > /dev/null
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
-    echo "[firewall] info service ${firewall_svc_name}:"
+    echo "[info]: info firewalld service ${firewall_svc_name}:"
     echo ""
     firewall-cmd --info-service=${firewall_svc_name}
-    echo ""
-    echo "[firewall] done"
 }
 
 config_sysctls() {
@@ -82,7 +80,7 @@ EOF
 
 create() {
     echo ""
-    echo "==> try to create sbc service <=="
+    echo "[info]: try to create sbc service"
     echo ""
 
     set_firewall
@@ -109,26 +107,26 @@ create() {
 
     # check parameters is exist
     if [ -z "$data_path" ]; then
-        echo  "\t data path(-p) not specified"
+        echo "[error]: data path(-p) not specified"
         create_help
         exit
     fi
     if [ -z "$sbc_img" ]; then
-        echo  "\t sbc docker image(-i) not specified"
+        echo "[error]: sbc docker image(-i) not specified"
         create_help
         exit
     fi
 
-    echo  "\t use datapath $data_path, img $sbc_img"
+    echo  "[info]: use datapath $data_path, img $sbc_img"
     echo ""
 
     docker pull $sbc_img
 
     # check datapath whether exist
     if [ ! -d "$data_path/sbc" ]; then
-        echo  "\t datapath $data_path/sbc not exist, try to reate it"
+        echo  "[warn]: datapath $data_path/sbc not exist, try to reate it"
         mkdir -p $data_path/sbc
-        echo  "\t created"
+        echo  "[info]: $data_path created"
         echo ""
     fi
 
@@ -152,7 +150,7 @@ EOF
         $sbc_img
 
     echo ""
-    echo  "\t done"
+    echo  "[info]: created"
     echo ""
 }
 
@@ -176,12 +174,12 @@ status() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "status all services"
+        echo "[info]: status all services"
         echo ""
         docker exec portsip.sbc supervisorctl status 
     else
         echo ""
-        echo "status service $service_name"
+        echo "[info]: status service $service_name"
         echo ""
         docker exec portsip.sbc supervisorctl status $service_name
     fi
@@ -206,14 +204,14 @@ restart() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "restart all services"
+        echo "[info]: restart all services"
         echo ""
         docker restart -t 300 portsip.sbc
         exit
     fi
 
     echo ""
-    echo "restart service $service_name"
+    echo "[info]: restart service $service_name"
     echo ""
     docker exec portsip.sbc supervisorctl restart $service_name
 }
@@ -237,12 +235,12 @@ start() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "start all services"
+        echo "[info]: start all services"
         echo ""
         docker start portsip.sbc
     else
         echo ""
-        echo "start service $service_name"
+        echo "[info]: start service $service_name"
         echo ""
         docker exec portsip.sbc supervisorctl start $service_name
     fi
@@ -267,13 +265,13 @@ stop() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo ""
-        echo "stop all services"
+        echo "[info]: stop all services"
         echo ""
         docker stop -t 300 portsip.sbc
         exit
     fi
     echo ""
-    echo "stop service $service_name"
+    echo "[info]: stop service $service_name"
     echo ""
     docker exec portsip.sbc supervisorctl stop $service_name
 }
@@ -281,6 +279,10 @@ stop() {
 rm() {
     # remove command firstly
     shift
+
+    echo ""
+    echo "[info]: remove service sbc"
+    echo ""
 
     #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
     #firewall-cmd --reload
@@ -307,12 +309,12 @@ upgrade(){
     docker inspect portsip.sbc > /dev/null
     # get docker image id
     used_sbc_img=$(docker ps -a --filter "name=^portsip.sbc$" --format "{{.Image}}")
-    echo "sbc_img: used/$used_sbc_img new/$new_sbc_img"
+    echo "[info]: used/$used_sbc_img new/$new_sbc_img"
     # get data path
     used_sbc_datapath=$(docker inspect -f '{{range .Mounts}}{{if gt (len .Source) 4}}{{if eq (slice .Source (slice .Source 3|len)) "sbc"}}{{slice .Source 0 (slice .Source 4|len)}} {{end}}{{end}}{{end}}' portsip.sbc)
     if [ -z "$used_sbc_datapath" ]; then
         echo ""
-        echo "ERROR: data path is empty"
+        echo "[error]: data path is empty"
         echo ""
         exit -1
     fi
@@ -324,15 +326,19 @@ upgrade(){
     docker image rm -f $used_sbc_img > /dev/null 2>&1
     # re-create
     echo ""
-    echo "start upgrade"
+    echo "[info]: start upgrade"
     echo ""
-    if [ -z "$new_sbc_img" ]; then
-        create run -i $used_sbc_img -p $used_sbc_datapath
-    else
-        create run -i $new_sbc_img -p $used_sbc_datapath
+    sbc_img=$new_sbc_img
+    if [ -z $sbc_img ]; then
+        sbc_img=$used_sbc_img
     fi
+    if [ -z $sbc_img ]; then
+        echo "[error]: unknown the docker image of sbc"
+        exit -1
+    fi
+    create run -i $sbc_img -p $used_sbc_datapath
     echo ""
-    echo "upgraded"
+    echo "[info]: upgraded"
     echo ""
 }
 
@@ -343,7 +349,7 @@ disable_upgrade(){
     systemctl mask unattended-upgrades  > /dev/null 2>&1 || true
     apt remove -y unattended-upgrades  > /dev/null 2>&1 || true
 
-    echo "removed unattended-upgrades"
+    #echo "removed unattended-upgrades"
 
     # disable  apt daily
     systemctl stop apt-daily.timer  > /dev/null 2>&1 || true
@@ -359,15 +365,16 @@ disable_upgrade(){
     systemctl disable apt-daily-upgrade.service  > /dev/null 2>&1 || true
     systemctl mask apt-daily-upgrade.service  > /dev/null 2>&1 || true
 
-    echo "disabled apt-daily-upgrade apt-daily"
+    #echo "disabled apt-daily-upgrade apt-daily"
 }
 
-echo "[warning] disable system auto update"
 if grep -q "Ubuntu" /etc/os-release; then
     disable_upgrade
 elif grep -q "Debian" /etc/os-release; then
     disable_upgrade
 fi
+
+echo "[warn]: disabled system auto update"
 
 case $1 in
 run)
@@ -402,4 +409,3 @@ upgrade)
     command_help
     ;;
 esac
-
