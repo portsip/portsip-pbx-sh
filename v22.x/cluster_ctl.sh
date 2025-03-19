@@ -267,11 +267,10 @@ configFirewallPorts(){
 
 set_firewall(){
     configFirewallPorts
-    echo ""
     echo "[info]: configure firewall"
 
-    `systemctl stop ufw &> /dev/null` || true
-    `systemctl disable ufw &> /dev/null` || true
+    `systemctl stop ufw > /dev/null 2>&1` || true
+    `systemctl disable ufw > /dev/null 2>&1` || true
     systemctl enable firewalld
     systemctl start firewalld
     echo "[info]: enabled firewalld"
@@ -301,8 +300,7 @@ set_firewall(){
     firewall-cmd --reload > /dev/null
     systemctl restart firewalld
     echo "[info]: info firewalld service ${firewall_svc_name}:"
-    echo ""
-    firewall-cmd --info-service=${firewall_svc_name}
+    firewall-cmd --service=${firewall_svc_name} --permanent --get-ports
 }
 
 config_sysctls() {
@@ -310,14 +308,13 @@ config_sysctls() {
     cat << EOF > /etc/sysctl.d/ip_unprivileged_port_start.conf
 net.ipv4.ip_unprivileged_port_start=0
 EOF
-    sysctl -p
-    sysctl --system
+
+    `sysctl -p > /dev/null 2>&1` || true
+    `sysctl --system > /dev/null 2>&1` || true
 }
 
 create() {
-    echo ""
     echo "[info]: try to create extend service"
-    echo ""
     #echo " args: $@"
     #echo "The number of arguments passed in are : $#"
 
@@ -338,14 +335,12 @@ create() {
     cd $pbx_extend_svc_type
 
     echo "[info]: variables"
-    echo ""
     echo "  datapath       : $data_path"
     echo "  ip(local)      : $local_ip_address"
     echo "  ip(pbx)        : $pbx_ip_address"
     echo "  pbx img        : $pbx_img"
     echo "  extend service : $pbx_extend_svc_type"
     echo "  extend name    : $pbx_extend_svc_name"
-    echo ""
 
     # check if the data path exists
     pbx_extend_svc_datapath="$data_path/$pbx_extend_svc_type"
@@ -353,7 +348,6 @@ create() {
         echo "[warn]: the current data path $pbx_extend_svc_datapath does not exist, try to create it"
         mkdir -p "$pbx_extend_svc_datapath"
         echo "[info]: $pbx_extend_svc_datapath created"
-        echo ""
     fi
 
     # write configure file
@@ -368,7 +362,8 @@ EXTEND_SVC_DATAPATH=$pbx_extend_svc_datapath
 EOF
 
     # get product version
-    docker image pull $pbx_img
+    echo "[info]: docker pull $pbx_img"
+    docker image pull $pbx_img > /dev/null
     pbx_production_version=$(export_pbx_production_version)
     if [ -z "$pbx_production_version" ]; then
         echo "[error]: no 'version' information found in the docker image"
@@ -389,9 +384,7 @@ EOF
     # run pbx extend service
     docker compose -f docker-compose.yml up -d
 
-    echo ""
     echo "[info]: created"
-    echo ""
 }
 
 op() {
@@ -414,9 +407,7 @@ op() {
     fi
     cd $pbx_extend_svc_type
 
-    echo ""
     echo "[info]: ${operator} service $pbx_extend_svc_type"
-    echo ""
   
     case $operator in
     restart)
@@ -513,17 +504,13 @@ upgrade(){
     docker inspect ${pbx_extend_svc_container_name} > /dev/null
     # change work directory
     if [ ! -d "./$pbx_extend_svc_type" ]; then
-        echo ""
         echo "[error]: the resources that the $pbx_extend_svc_type service depends on are lost."
-        echo ""
         exit -1
     fi
     cd $pbx_extend_svc_type
 
     if [ ! -f "$pbx_exend_deploy_config_file" ]; then 
-        echo ""
         echo "[error]: the configures that the $pbx_extend_svc_type service depends on are lost."
-        echo ""
         exit -1
     fi
 
@@ -538,14 +525,12 @@ upgrade(){
 
 
     echo "[info]: variables"
-    echo ""
     echo "  datapath       : $data_path"
     echo "  ip(local)      : $local_ip_address"
     echo "  ip(pbx)        : $pbx_ip_address"
     echo "  pbx img        : used/$used_pbx_img new/$pbx_img"
     echo "  extend service : $pbx_extend_svc_type"
     echo "  extend name    : $pbx_extend_svc_name"
-    echo ""
 
     # remove container
     echo "[info]: start upgrade"
@@ -567,9 +552,7 @@ upgrade(){
     command="create run $paras"
     $command
 
-    echo ""
     echo "[info]: upgraded"
-    echo ""
 }
 
 if grep -q "Ubuntu" /etc/os-release; then
