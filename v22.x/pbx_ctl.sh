@@ -874,7 +874,7 @@ create() {
     local pbx_pre_version=
     local pbx_new_version=
     # parse parameters
-    while getopts p:a:i:d:f:U:P:R option
+    while getopts p:a:i:d:f:U:P:R: option
     do 
         case "${option}" in
             p)

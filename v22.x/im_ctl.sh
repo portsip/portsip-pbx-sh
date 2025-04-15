@@ -89,7 +89,7 @@ is_production_version_less_than_22_0() {
 parse_cmd_parameters() {
     echo "[info]: args $@"
     
-    while getopts f:d:p:a:A:x:i:t:E:U:P:R option
+    while getopts f:d:p:a:A:x:i:t:E:U:P:R: option
     do 
         case "${option}" in
             p)

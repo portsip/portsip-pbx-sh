@@ -92,7 +92,7 @@ create() {
     data_path=
     sbc_img=
     # parse parameters
-    while getopts p:i:U:P:R option
+    while getopts p:i:U:P:R: option
     do 
         case "${option}" in
             p)
