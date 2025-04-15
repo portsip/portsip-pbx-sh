@@ -47,6 +47,12 @@ firewall_predfined_ports="8887/tcp"
 
 im_deploy_config_file=".configure_im"
 
+#Defaults to Docker Hub if no server is specified
+docker_hub_registry=
+#Authenticate to a registry.
+docker_hub_username=
+docker_hub_token=
+
 export_production_version() {
     local null_str=null
     local labels=$(docker image inspect --format='{{json .Config.Labels}}' $im_img)
@@ -83,7 +89,7 @@ is_production_version_less_than_22_0() {
 parse_cmd_parameters() {
     echo "[info]: args $@"
     
-    while getopts f:d:p:a:A:x:i:t:E option
+    while getopts f:d:p:a:A:x:i:t:E:U:P:R option
     do 
         case "${option}" in
             p)
@@ -112,6 +118,15 @@ parse_cmd_parameters() {
                 ;;
             f)
                 storage=${OPTARG}
+                ;;
+            U)
+                docker_hub_username=${OPTARG}
+                ;;
+            P)
+                docker_hub_token=${OPTARG}
+                ;;
+            R)
+                docker_hub_registry=${OPTARG}
                 ;;
         esac
     done
@@ -558,6 +573,11 @@ create() {
 
     config_sysctls
 
+    if [ ! -z "$docker_hub_username" ] && [ ! -z "$docker_hub_token" ]; then
+        echo "[info]: docker login -u $docker_hub_username $docker_hub_registry"
+        docker login -u "$docker_hub_username" -p "$docker_hub_token" $docker_hub_registry
+    fi
+
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
         mkdir $extend_svc_type
@@ -573,6 +593,8 @@ create() {
     echo "db img    : $db_img"
     echo "token     : $im_token"
     echo "storage   : $storage"
+    echo "hub user  : $docker_hub_username"
+    echo "hub server: $docker_hub_registry"
 
     # get product version
     docker image pull $im_img
@@ -601,6 +623,8 @@ DB_IMG=$db_img
 EXTEND_SVC_TYPE=$extend_svc_type
 RUNNING_MODE=$running_mode
 STORAGE=$storage
+HUB_USER=$docker_hub_username
+HUB_SERVER=$docker_hub_registry
 EOF
 
     # check storage datapath whether exist

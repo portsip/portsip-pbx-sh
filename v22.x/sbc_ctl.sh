@@ -4,6 +4,12 @@ set -e
 firewall_svc_name="portsip-sbc"
 firewall_predfined_ports="25000-34999/udp 5066/udp 5065/tcp 5067/tcp 5069/tcp 8882/tcp 8883/tcp 10443/tcp"
 
+#Defaults to Docker Hub if no server is specified
+docker_hub_registry=
+#Authenticate to a registry.
+docker_hub_username=
+docker_hub_token=
+
 create_help() {
     echo  " command run options:"
     echo  "     -p <path>: required, sbc data path"
@@ -86,7 +92,7 @@ create() {
     data_path=
     sbc_img=
     # parse parameters
-    while getopts p:i: option
+    while getopts p:i:U:P:R option
     do 
         case "${option}" in
             p)
@@ -94,6 +100,15 @@ create() {
                 ;;
             i)
                 sbc_img=${OPTARG}
+                ;;
+            U)
+                docker_hub_username=${OPTARG}
+                ;;
+            P)
+                docker_hub_token=${OPTARG}
+                ;;
+            R)
+                docker_hub_registry=${OPTARG}
                 ;;
         esac
     done
@@ -108,6 +123,11 @@ create() {
         echo "[error]: sbc docker image(-i) not specified"
         create_help
         exit
+    fi
+
+    if [ ! -z "$docker_hub_username" ] && [ ! -z "$docker_hub_token" ]; then
+        echo "[info]: docker login -u $docker_hub_username $docker_hub_registry"
+        docker login -u "$docker_hub_username" -p "$docker_hub_token" $docker_hub_registry
     fi
 
     echo  "[info]: use datapath $data_path, img $sbc_img"
@@ -129,6 +149,8 @@ create() {
     cat << EOF > .configure_sbc
 SBC_DATA_PATH=$data_path
 SBC_IMG=$sbc_img
+HUB_USER=$docker_hub_username
+HUB_SERVER=$docker_hub_registry
 EOF
 
     # run sbc service

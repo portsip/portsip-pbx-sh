@@ -16,6 +16,12 @@ fi
 
 pbx_deploy_config_file=".configure_pbx"
 
+#Defaults to Docker Hub if no server is specified
+docker_hub_registry=
+#Authenticate to a registry.
+docker_hub_username=
+docker_hub_token=
+
 cd pbx
 
 set_firewall(){
@@ -868,7 +874,7 @@ create() {
     local pbx_pre_version=
     local pbx_new_version=
     # parse parameters
-    while getopts p:a:i:d:f: option
+    while getopts p:a:i:d:f:U:P:R option
     do 
         case "${option}" in
             p)
@@ -885,6 +891,15 @@ create() {
                 ;;
             f)
                 storage=${OPTARG}
+                ;;
+            U)
+                docker_hub_username=${OPTARG}
+                ;;
+            P)
+                docker_hub_token=${OPTARG}
+                ;;
+            R)
+                docker_hub_registry=${OPTARG}
                 ;;
         esac
     done
@@ -906,6 +921,11 @@ create() {
     if [ -z "$db_img" ]; then
         echo "[error]: option -d not specified"
         exit -1
+    fi
+
+    if [ ! -z "$docker_hub_username" ] && [ ! -z "$docker_hub_token" ]; then
+        echo "[info]: docker login -u $docker_hub_username $docker_hub_registry"
+        docker login -u "$docker_hub_username" -p "$docker_hub_token" $docker_hub_registry
     fi
 
     # check datapath whether exist
@@ -954,6 +974,8 @@ create() {
     echo "    pbx  img: $pbx_img"
     echo "    db   img: $db_img"
     echo "     storage: $storage"
+    echo "    hub user: $docker_hub_username"
+    echo "  hub server: $docker_hub_registry"
 
     # change directory mode
     chmod 755 $data_path
@@ -966,6 +988,8 @@ PBX_IMG=$pbx_img
 PBX_DB_IMG=$db_img
 DB_PASSWORD=$db_password
 STORAGE=$storage
+HUB_USER=$docker_hub_username
+HUB_SERVER=$docker_hub_registry
 EOF
 
     # get product version

@@ -31,6 +31,12 @@ capture_port_2=9061
 firewall_svc_name="portsip-trace-svc"
 firewall_predfined_ports=
 
+#Defaults to Docker Hub if no server is specified
+docker_hub_registry=
+#Authenticate to a registry.
+docker_hub_username=
+docker_hub_token=
+
 if [ -z $1 ];
 then 
     echo "[error]: unknown command"
@@ -185,7 +191,7 @@ create() {
     db_password=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8`
 
     # parse parameters
-    while getopts p:k:d:w:c:l:y:z: option
+    while getopts p:k:d:w:c:l:y:z:U:P:R: option
     do 
         case "${option}" in
             p)
@@ -211,6 +217,15 @@ create() {
                 ;;
             z)
                 capture_port_2=${OPTARG}
+                ;;
+            U)
+                docker_hub_username=${OPTARG}
+                ;;
+            P)
+                docker_hub_token=${OPTARG}
+                ;;
+            R)
+                docker_hub_registry=${OPTARG}
                 ;;
         esac
     done
@@ -261,6 +276,11 @@ create() {
         capture_port_2=9061
     fi
 
+    if [ ! -z "$docker_hub_username" ] && [ ! -z "$docker_hub_token" ]; then
+        echo "[info]: docker login -u $docker_hub_username $docker_hub_registry"
+        docker login -u "$docker_hub_username" -p "$docker_hub_token" $docker_hub_registry
+    fi
+
     set_firewall
 
     echo "[info]: variables"
@@ -271,6 +291,8 @@ create() {
     echo "    heplify img : $heplify_img"
     echo "    http port   : $http_port"
     echo "    capture port: $capture_port_2"
+    echo "        hub user: $docker_hub_username"
+    echo "      hub server: $docker_hub_registry"
 
     cat << EOF > .configure
 data_path       $data_path
@@ -280,6 +302,8 @@ webapp_img      $webapp_img
 heplify_img     $heplify_img
 http_port       $http_port
 capture_port_2  $capture_port_2
+hub_user        $docker_hub_username
+hub_server      $docker_hub_registry
 EOF
 
     # check datapath whether exist

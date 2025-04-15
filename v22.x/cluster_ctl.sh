@@ -28,6 +28,12 @@ firewall_svc_name=
 pbx_extend_svc_container_name=
 pbx_exend_deploy_config_file=".configure_extend"
 
+#Defaults to Docker Hub if no server is specified
+docker_hub_registry=
+#Authenticate to a registry.
+docker_hub_username=
+docker_hub_token=
+
 export_pbx_production_version() {
     local null_str=null
     local labels=$(docker image inspect --format='{{json .Config.Labels}}' $pbx_img)
@@ -82,7 +88,7 @@ verify_svc_type() {
 parse_cmd_parameters() {
     echo "[info]: args $@"
     
-    while getopts p:a:x:i:s:n: option
+    while getopts p:a:x:i:s:n:U:P:R: option
     do 
         case "${option}" in
             p)
@@ -103,6 +109,15 @@ parse_cmd_parameters() {
                 ;;
             n)
                 pbx_extend_svc_name=${OPTARG}
+                ;;
+            U)
+                docker_hub_username=${OPTARG}
+                ;;
+            P)
+                docker_hub_token=${OPTARG}
+                ;;
+            R)
+                docker_hub_registry=${OPTARG}
                 ;;
         esac
     done
@@ -328,6 +343,11 @@ create() {
 
     config_sysctls
 
+    if [ ! -z "$docker_hub_username" ] && [ ! -z "$docker_hub_token" ]; then
+        echo "[info]: docker login -u $docker_hub_username $docker_hub_registry"
+        docker login -u "$docker_hub_username" -p "$docker_hub_token" $docker_hub_registry
+    fi
+
     # change work directory
     if [ ! -d "./$pbx_extend_svc_type" ]; then
         mkdir $pbx_extend_svc_type
@@ -341,6 +361,8 @@ create() {
     echo "  pbx img        : $pbx_img"
     echo "  extend service : $pbx_extend_svc_type"
     echo "  extend name    : $pbx_extend_svc_name"
+    echo "  hub user       : $docker_hub_username"
+    echo "  hub server     : $docker_hub_registry"
 
     # check if the data path exists
     pbx_extend_svc_datapath="$data_path/$pbx_extend_svc_type"
@@ -359,6 +381,8 @@ PBX_IMG=$pbx_img
 EXTEND_SVC_TYPE=$pbx_extend_svc_type
 EXTEND_SVC_NAME=$pbx_extend_svc_name
 EXTEND_SVC_DATAPATH=$pbx_extend_svc_datapath
+HUB_USER=$docker_hub_username
+HUB_SERVER=$docker_hub_registry
 EOF
 
     # get product version
