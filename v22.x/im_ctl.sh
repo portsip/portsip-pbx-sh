@@ -53,6 +53,8 @@ docker_hub_registry=
 docker_hub_username=
 docker_hub_token=
 
+echo "[info]: Starting..."
+
 export_production_version() {
     local null_str=null
     local labels=$(docker image inspect --format='{{json .Config.Labels}}' $im_img)

@@ -2,6 +2,8 @@
 
 set -ex
 
+echo "[info]: Starting..."
+
 # install docker and docker compose plugin
 install_docker_on_centos(){
     echo ""

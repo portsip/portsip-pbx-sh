@@ -10,6 +10,8 @@ docker_hub_registry=
 docker_hub_username=
 docker_hub_token=
 
+echo "[info]: Starting..."
+
 create_help() {
     echo  " command run options:"
     echo  "     -p <path>: required, sbc data path"

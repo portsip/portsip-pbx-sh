@@ -24,6 +24,8 @@ docker_hub_token=
 
 cd pbx
 
+echo "[info]: Starting..."
+
 set_firewall(){
     echo "[info]: configure firewall"
 

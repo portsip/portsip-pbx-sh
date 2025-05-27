@@ -12,6 +12,8 @@ scriptImCtlUrl="$url/im_ctl.sh"
 scriptClusterCtlUrl="$url/cluster_ctl.sh"
 scriptTraceCtlUrl="$url/trace_ctl.sh"
 
+echo "[info]: Starting..."
+
 if [ ! -d "$workspace" ]; then
     echo "[warn]: workspace $workspace does not exist."
     mkdir -p $workspace

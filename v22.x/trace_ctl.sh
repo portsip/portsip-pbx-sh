@@ -37,6 +37,8 @@ docker_hub_registry=
 docker_hub_username=
 docker_hub_token=
 
+echo "[info]: Starting..."
+
 if [ -z $1 ];
 then 
     echo "[error]: unknown command"
