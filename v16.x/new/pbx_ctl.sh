@@ -520,6 +520,11 @@ services:
       - /etc/localtime:/etc/localtime
     environment:
       - LD_LIBRARY_PATH=/usr/local/lib
+      - LD_PRELOAD=/usr/local/lib/libmimalloc.so
+      - MIMALLOC_PAGE_RESET=1
+      - MIMALLOC_SHOW_STATS=1
+      - MIMALLOC_VERBOSE=1
+      - MIMALLOC_SHOW_ERRORS=1
     cap_add:
       - SYS_PTRACE
     restart: unless-stopped
