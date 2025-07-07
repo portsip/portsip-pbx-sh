@@ -807,6 +807,10 @@ upgrade(){
     echo "[info]: upgraded"
 }
 
+remove_unused_imgs(){
+    docker image prune -a --filter "label=product=PBX" -f  > /dev/null 2>&1 || true
+}
+
 disable_upgrade(){
     # disable unattended-upgrades
     systemctl stop unattended-upgrades  > /dev/null 2>&1 || true
@@ -868,6 +872,7 @@ rm)
 
 upgrade)
     upgrade $@
+    remove_unused_imgs
     ;;
 
 *)

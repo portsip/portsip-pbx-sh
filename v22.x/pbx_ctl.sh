@@ -1143,6 +1143,10 @@ upgrade(){
     echo "[info]: upgraded"
 }
 
+remove_unused_imgs(){
+    docker image prune -a --filter "label=product=PBX" -f  > /dev/null 2>&1 || true
+}
+
 if grep -q "Ubuntu" /etc/os-release; then
     disable_upgrade
 elif grep -q "Debian" /etc/os-release; then
@@ -1183,6 +1187,7 @@ up)
 
 upgrade)
     upgrade $@
+    remove_unused_imgs
     ;;
 
 *)
