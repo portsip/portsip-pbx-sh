@@ -5,7 +5,7 @@ firewall_svc_name="portsip-pbx"
 firewall_predfined_ports="8887-8889/tcp 8885/tcp 4222/tcp 80/tcp 443/tcp 5060/udp 5061/tcp 5063/tcp 45000-65000/udp"
 
 if [ -z $1 ];
-then 
+then
     echo "[error]: unknown command"
     exit -1
 fi
@@ -88,7 +88,11 @@ LEOF
     grep -o '"version":"[^"]*' labels.json | grep -o '[^"]*$'
 }
 
-is_pbx_production_version_less_than_22_0() {
+# judge whether pbx version < 22.3
+# return values:
+#    1 => succeed
+#    0 => failed
+is_pbx_production_version_less_than_22_3() {
     # x.y.z
     local v=$1
 
@@ -100,6 +104,8 @@ is_pbx_production_version_less_than_22_0() {
     set +f; unset IFS
 
     if [ $x -lt 22 ]; then
+        echo 1
+    elif [ $y -lt 3 ]; then
         echo 1
     else
         echo 0
@@ -180,6 +186,10 @@ svc_name() {
         echo "databoard"
         ;;
 
+    portsip.ai)
+        echo "ai"
+        ;;
+
     *)
         echo $1
         ;;
@@ -199,13 +209,12 @@ export_configure() {
     local pbx_db_password=$5
     local pbx_product_version=$6
 
-    local webserver_command="\"/usr/sbin/nginx\", \"-c\", \"/etc/nginx/nginx.conf\""
+    local webserver_command="\"/usr/local/bin/websrv\", \"serve\", \"-n\", \"websrv\", \"-D\",\"/var/lib/portsip/pbx\""
 
-    # pbx >= 22.0
-    local ret=$(is_pbx_production_version_less_than_22_0 $pbx_product_version)
-    # ret: 1 for success and 0 for failure
-    if [ $ret -eq 0 ]; then
-        webserver_command="\"/usr/local/bin/websrv\", \"serve\", \"-n\", \"websrv\", \"-D\",\"/var/lib/portsip/pbx\""
+    local less2203=$(is_pbx_production_version_less_than_22_3 $pbx_product_version)
+    if [ $less2203 -eq 0 ]; then
+        # >= 22.3
+        webserver_command="\"/bin/bash\", \"/usr/local/bin/run_websrv.sh\", \"/usr/local/bin/websrv\", \"serve\", \"-n\", \"websrv\", \"-D\",\"/var/lib/portsip/pbx\""
     fi
 
     cat << FEOF > docker-compose-portsip-pbx.yml
@@ -262,7 +271,7 @@ services:
 
   nats: 
     image: ${pbx_img}
-    command: ["/usr/local/bin/nats-server", "--log", "/var/lib/portsip/pbx/log/nats.log", "--http_port", "8222"]
+    command: ["/usr/local/bin/nats-server", "-js", "-sd", "/var/lib/portsip/pbx/nats", "--log", "/var/lib/portsip/pbx/log/nats.log", "--http_port", "8222"]
     network_mode: host
     user: portsip
     container_name: "portsip.nats"
@@ -563,6 +572,53 @@ services:
       database:
         condition: service_healthy
 
+  gateway: 
+    image: ${pbx_img}
+    command:  ["/usr/local/bin/apigate", "serve", "-D","/var/lib/portsip/pbx"]
+    network_mode: host
+    user: portsip
+    container_name: "portsip.gateway"
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+FEOF
+
+    if [ ! -z "$storage" ]; then 
+      cat << FEOF >> docker-compose-portsip-pbx.yml
+      - pbx-storage-data:/var/lib/portsip/pbx/storage
+FEOF
+    fi
+
+    # pbx >= 22.3
+    if [ $less2203 -eq 0 ]; then
+        cat << FEOF >> docker-compose-portsip-pbx.yml
+  # PortSIP AI
+  ai: 
+    image: ${pbx_img}
+    command: ["aiconnector", "-D", "/var/lib/portsip/pbx"]
+    network_mode: host
+    user: portsip
+    container_name: "portsip.ai"
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
+    cap_add:
+      - SYS_PTRACE
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+FEOF
+    else
+        cat << FEOF >> docker-compose-portsip-pbx.yml
   # PortSIP Data Board
   databoard: 
     image: ${pbx_img}
@@ -587,27 +643,6 @@ services:
         condition: service_healthy
       callmanager:
         condition: service_started
-
-  gateway: 
-    image: ${pbx_img}
-    command:  ["/usr/local/bin/apigate", "serve", "-D","/var/lib/portsip/pbx"]
-    network_mode: host
-    user: portsip
-    container_name: "portsip.gateway"
-    restart: unless-stopped
-    depends_on:
-      nats:
-        condition: service_healthy
-      database:
-        condition: service_healthy
-    volumes:
-      - pbx-data:/var/lib/portsip/pbx
-      - /etc/localtime:/etc/localtime
-FEOF
-
-    if [ ! -z "$storage" ]; then 
-      cat << FEOF >> docker-compose-portsip-pbx.yml
-      - pbx-storage-data:/var/lib/portsip/pbx/storage
 FEOF
     fi
 
