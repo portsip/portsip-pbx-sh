@@ -1131,7 +1131,7 @@ upgrade(){
     done
 
     # check the container exist
-    docker inspect portsip.callmanager > /dev/null
+    # docker inspect portsip.callmanager > /dev/null
 
     if [ ! -f "$pbx_deploy_config_file" ]; then 
         echo "[error]: the configures that the pbx service depends on are lost."
