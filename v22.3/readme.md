@@ -1,1 +1,0 @@
-For the PortSIP PBX v22.3 and later.

@@ -605,9 +605,6 @@ FEOF
     network_mode: host
     user: portsip
     container_name: "portsip.ai"
-    volumes:
-      - pbx-data:/var/lib/portsip/pbx
-      - /etc/localtime:/etc/localtime
     cap_add:
       - SYS_PTRACE
     restart: unless-stopped
@@ -616,7 +613,15 @@ FEOF
         condition: service_healthy
       database:
         condition: service_healthy
+    volumes:
+      - pbx-data:/var/lib/portsip/pbx
+      - /etc/localtime:/etc/localtime
 FEOF
+    if [ ! -z "$storage" ]; then 
+      cat << FEOF >> docker-compose-portsip-pbx.yml
+      - pbx-storage-data:/var/lib/portsip/pbx/storage
+FEOF
+    fi
     else
         cat << FEOF >> docker-compose-portsip-pbx.yml
   # PortSIP Data Board
