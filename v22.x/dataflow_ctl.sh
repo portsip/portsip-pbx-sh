@@ -247,6 +247,7 @@ services:
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
       - CLICKHOUSE_PASSWORD=${db_password}
+      - CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS=true
     cap_add:
       - NET_ADMIN
       - SYS_NICE
@@ -468,6 +469,7 @@ create() {
 
     # get product version
     docker image pull $dataflow_img
+    docker image pull $db_img
     production_version=$(export_production_version)
     if [ -z "$production_version" ]; then
         echo "[error]: no 'version' information found in the docker image"
