@@ -258,11 +258,11 @@ services:
         hard: 655360
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
-      interval: 10s
-      timeout: 3s
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping && timeout 5 clickhouse-client --query 'SELECT 1'"]
+      interval: 300s
+      timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 300s
 
   initdt:
     image: ${dataflow_img}
@@ -338,11 +338,11 @@ services:
         hard: 655360
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
-      interval: 10s
-      timeout: 3s
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping && timeout 5 clickhouse-client --query 'SELECT 1'"]
+      interval: 300s
+      timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 300s
 
   dataflow: 
     image: ${dataflow_img}
