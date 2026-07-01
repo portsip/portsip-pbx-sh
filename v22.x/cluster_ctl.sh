@@ -3,7 +3,7 @@ set -e
 
 if [ -z $1 ]; then 
     echo "[error]: unknown command"
-    exit -1
+    exit 1
 fi
 
 # -p
@@ -83,7 +83,7 @@ verify_svc_type() {
     *)
         echo "[error]: service type ${pbx_extend_svc_type} is not supported."
         echo "         only support queue-server-only,media-server-only,meeting-server-only,vr-server-only."
-        exit -1
+        exit 1
     esac
 }
 
@@ -129,27 +129,27 @@ verify_parameters() {
         # check parameters is exist
     if [ -z "$data_path" ]; then
         echo "[error]: option -p not specified"
-        exit -1
+        exit 1
     fi
     if [ -z "$local_ip_address" ]; then
         echo "[error]: option -a not specified"
-        exit -1
+        exit 1
     fi
     if [ -z "$pbx_ip_address" ]; then
         echo "[error]: option -x not specified"
-        exit -1
+        exit 1
     fi
     if [ -z "$pbx_img" ]; then
         echo "[error]: option -i not specified"
-        exit -1
+        exit 1
     fi
     if [ -z "$pbx_extend_svc_type" ]; then
         echo "[error]: option -s not specified"
-        exit -1
+        exit 1
     fi
     if [ -z "$pbx_extend_svc_name" ]; then
         echo "[error]: option -n not specified"
-        exit -1
+        exit 1
     fi
 
     verify_svc_type
@@ -385,6 +385,7 @@ EXTEND_SVC_NAME=$pbx_extend_svc_name
 EXTEND_SVC_DATAPATH=$pbx_extend_svc_datapath
 HUB_USER=$docker_hub_username
 HUB_SERVER=$docker_hub_registry
+HUB_TOKEN=$docker_hub_token
 EOF
 
     # get product version
@@ -393,7 +394,7 @@ EOF
     pbx_production_version=$(export_pbx_production_version)
     if [ -z "$pbx_production_version" ]; then
         echo "[error]: no 'version' information found in the docker image"
-        exit -1
+        exit 1
     fi
     echo "[info]: current pbx version $pbx_production_version"
     # pbx >= 16.1
@@ -401,7 +402,7 @@ EOF
     # ret: 1 for success and 0 for failure
     if [ $ret -eq 1 ]; then
       echo "[error]: pbx version < 22.0.0"
-      exit -1
+      exit 1
     fi
 
     export_configure
@@ -424,12 +425,12 @@ op() {
     # check parameters is exist
     if [ -z "$pbx_extend_svc_type" ]; then
         echo "[error]: option -s not specified"
-        exit -1
+        exit 1
     fi
     # change work directory
     if [ ! -d "./$pbx_extend_svc_type" ]; then
         echo "[error]: no service configuration found"
-        exit -1
+        exit 1
     fi
     cd $pbx_extend_svc_type
 
@@ -440,6 +441,7 @@ op() {
         docker compose -f docker-compose.yml stop -t 300 > /dev/null
         sleep 3
         docker compose -f docker-compose.yml start > /dev/null
+        echo "[info]: service restarted"
         ;;
 
     status)
@@ -449,22 +451,25 @@ op() {
 
     stop)
         docker compose -f docker-compose.yml stop -t 300 > /dev/null
+        echo "[info]: service stopped"
         ;;
 
     start)
         docker compose -f docker-compose.yml start > /dev/null
+        echo "[info]: service started"
         ;;
 
     rm)
+        dpath=$(sed -n '/^PBX_DATA_PATH/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
         firewall-cmd -q --permanent --delete-service=${pbx_extend_svc_type} || true
         firewall-cmd --reload
-        #local volume_name="$pbx_extend_svc_type"
         docker compose -f docker-compose.yml down -v > /dev/null
-        #docker volume rm `docker volume ls  -q | grep ${volume_name}` || true
+        echo "[info]: host bind-mount data preserved at $dpath after the teardown."
+        echo "[info]: service removed"
         ;;
     *)
         echo "[error]: unknown command $operator"
-        exit -1
+        exit 1
     esac
 }
 
@@ -510,7 +515,7 @@ service_container_name(){
         ;;
     *)
         echo "[error]: service type ${pbx_extend_svc_type} is not supported."
-        exit -1
+        exit 1
     esac
 }
 
@@ -521,23 +526,23 @@ upgrade(){
     # check parameters is exist
     if [ -z "$pbx_extend_svc_type" ]; then
         echo "[error]: option -s not specified"
-        exit -1
+        exit 1
     fi
     verify_svc_type
     service_container_name
     
     # check the container exist
-    docker inspect ${pbx_extend_svc_container_name} > /dev/null
+    # docker inspect ${pbx_extend_svc_container_name} > /dev/null
     # change work directory
     if [ ! -d "./$pbx_extend_svc_type" ]; then
         echo "[error]: the resources that the $pbx_extend_svc_type service depends on are lost."
-        exit -1
+        exit 1
     fi
     cd $pbx_extend_svc_type
 
     if [ ! -f "$pbx_exend_deploy_config_file" ]; then 
         echo "[error]: the configures that the $pbx_extend_svc_type service depends on are lost."
-        exit -1
+        exit 1
     fi
 
     # read configures from .configure_im
@@ -548,7 +553,9 @@ upgrade(){
     pbx_extend_svc_type=$(sed -n '/^EXTEND_SVC_TYPE/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     pbx_extend_svc_name=$(sed -n '/^EXTEND_SVC_NAME/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     pbx_extend_svc_datapath=$(sed -n '/^EXTEND_SVC_DATAPATH/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
-
+    docker_hub_username=$(sed -n '/^HUB_USER/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_registry=$(sed -n '/^HUB_SERVER/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_token=$(sed -n '/^HUB_TOKEN/p' ${pbx_exend_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
 
     echo "[info]: variables"
     echo "  datapath       : $data_path"
@@ -558,11 +565,16 @@ upgrade(){
     echo "  extend service : $pbx_extend_svc_type"
     echo "  extend name    : $pbx_extend_svc_name"
 
-    # remove container
     echo "[info]: start upgrade"
-    docker compose -f docker-compose.yml down -v > /dev/null
-    # remove docker image
-    docker image rm -f $used_pbx_img > /dev/null 2>&1
+    if docker ps -a --format '{{.Names}}' | grep -qw ${pbx_extend_svc_container_name}; then
+        # remove container
+        docker compose -f docker-compose.yml down -v > /dev/null
+        # remove docker image
+        # docker image rm -f $used_pbx_img > /dev/null 2>&1
+    else
+        echo "[info]: not found service $pbx_extend_svc_type"
+    fi
+
     echo "[info]: the old service has been deleted"
     # re-create
     paras="-p ${data_path} -a $local_ip_address -x $pbx_ip_address -s $pbx_extend_svc_type -n $pbx_extend_svc_name"
@@ -571,10 +583,21 @@ upgrade(){
     fi
     if [ -z $pbx_img ]; then
         echo "[error]: unknown the docker image of pbx"
-        exit -1
+        exit 1
     fi
 
     paras="$paras -i $pbx_img"
+    if [ ! -z $docker_hub_username ]; then
+        paras="$paras -U $docker_hub_username"
+    fi
+    if [ ! -z $docker_hub_token ]; then
+        paras="$paras -P $docker_hub_token"
+    fi
+    if [ ! -z $docker_hub_registry ]; then
+        paras="$paras -R $docker_hub_registry"
+    fi
+
+    cd ../
     command="create run $paras"
     $command
 
@@ -625,5 +648,6 @@ upgrade)
 
 *)
     echo "[error]: unknown command $1"
+    exit 1
     ;;
 esac

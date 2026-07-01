@@ -3,7 +3,7 @@ set -e
 
 if [ -z $1 ]; then 
     echo "[error]: unknown command"
-    exit -1
+    exit 1
 fi
 
 # -p
@@ -95,12 +95,12 @@ verify_parameters() {
     # check parameters is exist
     if [ -z "$data_path" ]; then
         echo "[error]: Option -p not specified"
-        exit -1
+        exit 1
     fi
 
     if [ -z "$img" ]; then
         echo "[error]: Option -i not specified"
-        exit -1
+        exit 1
     fi
 
     echo "[info]: run as STANDALONE mode"
@@ -224,7 +224,7 @@ create() {
     production_version=$(export_production_version)
     if [ -z "$production_version" ]; then
         echo "[error]: no 'version' information found in the docker image"
-        exit -1
+        exit 1
     fi
     echo "[info]: current version $production_version"
 
@@ -232,7 +232,7 @@ create() {
     # ret: 1 for success and 0 for failure
     if [ $ret -eq 1 ]; then
       echo "[error]: version $production_version < 22.4.0"
-      exit -1
+      exit 1
     fi
 
     # write configure file
@@ -242,6 +242,7 @@ IMG=$img
 EXTEND_SVC_TYPE=$extend_svc_type
 HUB_USER=$docker_hub_username
 HUB_SERVER=$docker_hub_registry
+HUB_TOKEN=$docker_hub_token
 EOF
 
     initdt
@@ -264,12 +265,12 @@ op() {
     # check parameters is exist
     if [ -z "$extend_svc_type" ]; then
         echo "[error]: certmanager not exist"
-        exit -1
+        exit 1
     fi
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
         echo "[error]: no service configuration found, not exist directory ${extend_svc_type}"
-        exit -1
+        exit 1
     fi
     cd $extend_svc_type
 
@@ -280,6 +281,7 @@ op() {
         docker compose -f ${compose_file} stop -t 300 > /dev/null
         sleep 3
         docker compose -f ${compose_file} start > /dev/null
+        echo "[info]: service restarted"
         ;;
 
     status)
@@ -289,19 +291,24 @@ op() {
 
     stop)
         docker compose -f ${compose_file} stop -t 300 > /dev/null
+        echo "[info]: service stopped"
         ;;
 
     start)
         docker compose -f ${compose_file} start > /dev/null
+        echo "[info]: service started"
         ;;
 
     rm)
+        dpath=$(sed -n '/^DATA_PATH/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
         docker compose -f ${compose_file} down -v > /dev/null
+        echo "[info]: host bind-mount data preserved at $dpath after the teardown."
+        echo "[info]: service removed"
         ;;
     
     *)
         echo "[error]: unknown command $operator"
-        exit -1
+        exit 1
         ;;
     esac
 }
@@ -325,27 +332,34 @@ upgrade(){
     # docker inspect portsip.certmanager > /dev/null
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
-        echo "[error]: the resources that the service depends on are lost."
-        exit -1
+        echo "[error]: required configuration directory(${extend_svc_type}) are missing."
+        exit 1
     fi
     cd $extend_svc_type
 
     if [ ! -f "$deploy_config_file" ]; then 
-        echo "[error]: the configures that the service depends on are lost."
-        exit -1
+        echo "[error]: required configuration file(${deploy_config_file}) are missing."
+        exit 1
     fi
 
     # read configures from configure file
     data_path=$(sed -n '/^DATA_PATH/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     img=$(sed -n '/^IMG/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_username=$(sed -n '/^HUB_USER/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_registry=$(sed -n '/^HUB_SERVER/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_token=$(sed -n '/^HUB_TOKEN/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
 
     echo "[info]: variables"
     echo "datapath        : $data_path"
     echo "img             : $img new/$new_img"
 
-    # remove container
     echo "[info]: start upgrade"
-    docker compose -f ${compose_file} down -v > /dev/null
+    if docker ps -a --format '{{.Names}}' | grep -qw 'portsip.certmanager'; then
+        # remove container
+        docker compose -f ${compose_file} down -v > /dev/null
+    else
+        echo "[info]: not found service $extend_svc_type"
+    fi
     # remove docker image
     # docker image rm -f $img > /dev/null 2>&1
     echo "[info]: the old service has been deleted"
@@ -356,10 +370,20 @@ upgrade(){
     fi
     if [ -z $img ]; then
         echo "[error]: unknown the service image"
-        exit -1
+        exit 1
     fi
     paras="$paras -i $img"
+    if [ ! -z $docker_hub_username ]; then
+        paras="$paras -U $docker_hub_username"
+    fi
+    if [ ! -z $docker_hub_token ]; then
+        paras="$paras -P $docker_hub_token"
+    fi
+    if [ ! -z $docker_hub_registry ]; then
+        paras="$paras -R $docker_hub_registry"
+    fi
 
+    cd ../
     command="create run $paras"
     $command
 
@@ -436,5 +460,6 @@ upgrade)
 
 *)
     echo "[error]: unknown command $1"
+    exit 1
     ;;
 esac

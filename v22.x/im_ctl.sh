@@ -3,7 +3,7 @@ set -e
 
 if [ -z $1 ]; then 
     echo "[error]: unknown command"
-    exit -1
+    exit 1
 fi
 
 # -p
@@ -53,6 +53,8 @@ docker_hub_registry=
 docker_hub_username=
 docker_hub_token=
 
+db_startup_grace=90
+
 echo "[info]: Starting..."
 
 export_production_version() {
@@ -91,7 +93,7 @@ is_production_version_less_than_22_0() {
 parse_cmd_parameters() {
     echo "[info]: args $@"
     
-    while getopts f:d:p:a:A:x:i:t:EU:P:R: option
+    while getopts f:d:p:a:A:x:i:t:EU:P:R:g: option
     do 
         case "${option}" in
             p)
@@ -130,6 +132,9 @@ parse_cmd_parameters() {
             R)
                 docker_hub_registry=${OPTARG}
                 ;;
+            g)
+                db_startup_grace=${OPTARG}
+                ;;
         esac
     done
 }
@@ -138,17 +143,17 @@ verify_parameters() {
         # check parameters is exist
     if [ -z "$data_path" ]; then
         echo "[error]: Option -p not specified"
-        exit -1
+        exit 1
     fi
 
     if [ -z "$im_img" ]; then
         echo "[error]: Option -i not specified"
-        exit -1
+        exit 1
     fi
 
     if [ -z "$im_token" ]; then
         echo "[error]: Option -t not specified"
-        exit -1
+        exit 1
     fi
 
     if [ $running_mode -eq 0 ]; then
@@ -159,19 +164,19 @@ verify_parameters() {
         ret=$(docker compose ls -a | grep pbx | wc -l)
         if [ $ret -ne 1 ]; then
             echo "[error]: pbx not deployed on this host(containers)"
-            exit -1
+            exit 1
         fi
         if [ ! -d "$data_path/pbx" ]; then
             echo "[error]: pbx not deployed on this host(datapath)"
-            exit -1
+            exit 1
         fi
         if [ ! -d "$data_path/postgresql" ]; then
             echo "[error]: pbx not deployed on this host(db)"
-            exit -1
+            exit 1
         fi
         if [ ! -f "$data_path/pbx/system.ini" ]; then 
             echo "[error]: pbx not deployed on this host(configure)"
-            exit -1
+            exit 1
         fi
         mkdir -p $data_path/pbx/im/storage
         chmod 755 $data_path/pbx/im
@@ -181,25 +186,28 @@ verify_parameters() {
         # extend service
         if [ -z "$pbx_ip_address" ]; then
             echo "[error]: Option -x not specified"
-            exit -1
+            exit 1
         fi
 
         if [ -z "$db_img" ]; then
             echo "[error]: Option -d not specified"
-            exit -1
+            exit 1
         fi
         
         ret=$(docker compose ls -a -q | grep pbx | wc -l)
         if [ $ret -ne 0 ]; then
             echo "[error]: already exist pbx on this host(containers)"
-            exit -1
+            exit 1
         fi
 
         if [ -z "$local_pri_ip_address" ] && [ -z "$local_pub_ip_address" ]; then
             echo "[error]: Option -a and -A not specified"
-            exit -1
+            exit 1
         fi
         echo "[info]: run as STANDALONE mode"
+    fi
+    if [ -z "$db_startup_grace" ]; then
+        db_startup_grace=90
     fi
 }
 
@@ -256,6 +264,12 @@ start_internal() {
     echo "[info]: dumped internal configure file '${im_compose_file}'"
 }
 
+set_firewall_trust_PBX_IP(){
+    echo "[info]: always trust pbx's IP address ${pbx_ip_address}:"
+    firewall-cmd --permanent --zone=trusted --add-source=$pbx_ip_address || true
+    firewall-cmd --reload || true
+}
+
 set_firewall(){
     echo "[info]: configure firewalld"
 
@@ -264,6 +278,8 @@ set_firewall(){
     systemctl enable firewalld
     systemctl start firewalld
     echo "[info]: enabled firewalld"
+
+    set_firewall_trust_PBX_IP
 
     ports=
     pre_svc_exist=$(firewall-cmd --get-services | grep ${firewall_svc_name} | wc -l)
@@ -339,10 +355,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "postgres" ]
-      interval: 3s
-      timeout: 1s
+      interval: 30s
+      timeout: 3s
       retries: 10
-      start_period: 3s
+      start_period: ${db_startup_grace}s
 
   initdt:
     image: ${im_img}
@@ -422,10 +438,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "postgres" ]
-      interval: 3s
-      timeout: 1s
+      interval: 30s
+      timeout: 3s
       retries: 10
-      start_period: 3s
+      start_period: ${db_startup_grace}s
 
   websvc: 
     image: ${im_img}
@@ -455,10 +471,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8902/svr_stats"]
-      interval: 3s
-      timeout: 1s
+      interval: 30s
+      timeout: 3s
       retries: 10
-      start_period: 3s
+      start_period: 30s
     volumes:
       - im-data:/var/lib/portsip/pbx
       - /etc/localtime:/etc/localtime
@@ -514,7 +530,7 @@ start_extension(){
     new_version=$(export_production_version)
     if [ -z "$new_version" ]; then
         echo "[error]: not found label 'version' in the im image"
-        exit -1
+        exit 1
     fi
     if [ -z "$pre_version" ]; then
         echo "[info]: try to create im"
@@ -531,7 +547,7 @@ start_extension(){
     if [ $crtOrUpRetEnv -ne 0 ]; then
         docker compose -f ${im_compose_ini_file} down -v > /dev/null
         echo "[error]: init or upgrade env"
-        exit -1
+        exit 1
     fi
     echo "[info]: initdt start "
     docker compose -f ${im_compose_ini_file} exec initdt /usr/local/bin/initdt.sh -D /var/lib/portsip/pbx --pg-superuser-name postgres --pg-superuser-password ${db_password}
@@ -540,7 +556,7 @@ start_extension(){
     docker compose -f ${im_compose_ini_file} down -v > /dev/null
     if [ $crtOrUpRet -ne 0 ]; then
         echo "[error]: init or upgrade"
-        exit -1
+        exit 1
     fi
 
     set -e
@@ -587,23 +603,23 @@ create() {
     cd $extend_svc_type
 
     echo "[info]: variables"
-    echo "datapath  : $data_path"
-    echo "ip(pri)   : $local_pri_ip_address"
-    echo "ip(pub)   : $local_pub_ip_address"
-    echo "ip(pbx)   : $pbx_ip_address"
-    echo "im img    : $im_img"
-    echo "db img    : $db_img"
-    echo "token     : $im_token"
-    echo "storage   : $storage"
-    echo "hub user  : $docker_hub_username"
-    echo "hub server: $docker_hub_registry"
+    echo "       datapath  : $data_path"
+    echo "       ip(pri)   : $local_pri_ip_address"
+    echo "       ip(pub)   : $local_pub_ip_address"
+    echo "       ip(pbx)   : $pbx_ip_address"
+    echo "       im img    : $im_img"
+    echo "       db img    : $db_img"
+    echo "       storage   : $storage"
+    echo "       hub user  : $docker_hub_username"
+    echo "       hub server: $docker_hub_registry"
+    echo "db startup period: $db_startup_grace"
 
     # get product version
     docker image pull $im_img
     production_version=$(export_production_version)
     if [ -z "$production_version" ]; then
         echo "[error]: no 'version' information found in the docker image"
-        exit -1
+        exit 1
     fi
     echo "[info]: current version $production_version"
 
@@ -611,7 +627,7 @@ create() {
     # ret: 1 for success and 0 for failure
     if [ $ret -eq 1 ]; then
       echo "[error]: version < 22.0.0"
-      exit -1
+      exit 1
     fi
 
     # write configure file
@@ -627,13 +643,16 @@ RUNNING_MODE=$running_mode
 STORAGE=$storage
 HUB_USER=$docker_hub_username
 HUB_SERVER=$docker_hub_registry
+HUB_TOKEN=$docker_hub_token
+IM_TOKEN=$im_token
+DB_STARTUP_GRACE=$db_startup_grace
 EOF
 
     # check storage datapath whether exist
     if [ ! -z "$storage" ]; then
         if [ ! -d "$storage" ]; then
             echo "[error]: storage datapath $storage not exist, exit"
-            exit -1
+            exit 1
         else
             chmod 755 "$storage"
             chown 888:888 "$storage"
@@ -664,12 +683,12 @@ op() {
     # check parameters is exist
     if [ -z "$extend_svc_type" ]; then
         echo "[error]: option -s not specified"
-        exit -1
+        exit 1
     fi
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
         echo "[error]: no service configuration found, not exist directory ${extend_svc_type}"
-        exit -1
+        exit 1
     fi
     cd $extend_svc_type
 
@@ -680,6 +699,7 @@ op() {
         docker compose -f ${im_compose_file} stop -t 300 > /dev/null
         sleep 3
         docker compose -f ${im_compose_file} start > /dev/null
+        echo "[info]: service restarted"
         ;;
 
     status)
@@ -689,19 +709,24 @@ op() {
 
     stop)
         docker compose -f ${im_compose_file} stop -t 300 > /dev/null
+        echo "[info]: service stopped"
         ;;
 
     start)
         docker compose -f ${im_compose_file} start > /dev/null
+        echo "[info]: service started"
         ;;
 
     rm)
+        dpath=$(sed -n '/^DATA_PATH/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
         docker compose -f ${im_compose_file} down -v > /dev/null
+        echo "[info]: host bind-mount data preserved at $dpath after the teardown."
+        echo "[info]: service removed"
         ;;
     
     *)
         echo "[error]: unknown command $operator"
-        exit -1
+        exit 1
         ;;
     esac
 }
@@ -710,29 +735,33 @@ upgrade(){
     shift
 
     new_im_img=
+    new_db_startup_grace=
 
     # parse parameters
-    while getopts i: option
+    while getopts i:g: option
     do 
         case "${option}" in
             i)
                 new_im_img=${OPTARG}
                 ;;
+            g)
+                new_db_startup_grace=${OPTARG}
+                ;;
         esac
     done
 
     # check the container exist
-    docker inspect portsip.instantmessage > /dev/null
+    # docker inspect portsip.instantmessage > /dev/null
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
         echo "[error]: the resources that the im service depends on are lost."
-        exit -1
+        exit 1
     fi
     cd $extend_svc_type
 
     if [ ! -f "$im_deploy_config_file" ]; then 
         echo "[error]: the configures that the im service depends on are lost."
-        exit -1
+        exit 1
     fi
 
     # read configures from .configure_im
@@ -745,32 +774,71 @@ upgrade(){
     #extend_svc_type=$(sed -n '/^EXTEND_SVC_TYPE/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     running_mode=$(sed -n '/^RUNNING_MODE/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     storage=$(sed -n '/^STORAGE/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    im_token=$(sed -n '/^IM_TOKEN/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_username=$(sed -n '/^HUB_USER/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_registry=$(sed -n '/^HUB_SERVER/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_token=$(sed -n '/^HUB_TOKEN/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    used_db_startup_grace=$(sed -n '/^DB_STARTUP_GRACE/p' ${im_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
 
-    token_idx=$(docker inspect -f '{{range $index,$element := .Args}}{{if eq $element "-t"}}{{$index}}{{break}}{{end}}{{end}}' portsip.instantmessage)
-    token_idx=$(($token_idx+1))
-    im_token=$(docker inspect -f "{{index .Args $token_idx}}" portsip.instantmessage)
     if [ -z $im_token ]; then
-        echo "[error]: failed to get im token"
-        exit -1
+        # try to read token from container
+        if docker ps -a --format '{{.Names}}' | grep -qw 'portsip.instantmessage'; then
+            token_idx=$(docker inspect -f '{{range $index,$element := .Args}}{{if eq $element "-t"}}{{$index}}{{break}}{{end}}{{end}}' portsip.instantmessage)
+            token_idx=$(($token_idx+1))
+            im_token=$(docker inspect -f "{{index .Args $token_idx}}" portsip.instantmessage)
+        else
+            echo "[info]: unable to get im token from container"
+        fi
     fi
 
+    if [ -z $im_token ]; then
+        echo "[error]: failed to get im token"
+        exit 1
+    fi
+
+    if [ -z "$new_db_startup_grace" ]; then
+        if [ ! -z "$used_db_startup_grace" ]; then
+            db_startup_grace=$used_db_startup_grace
+        fi
+    else
+        db_startup_grace=$new_db_startup_grace
+    fi
+
+    cat << EOF > .configure_im
+DATA_PATH=$data_path
+PRI_IP_ADDRESS=$local_pri_ip_address
+PUB_IP_ADDRESS=$local_pub_ip_address
+PBX_IP_ADDRESS=$pbx_ip_address
+IM_IMG=$im_img
+DB_IMG=$db_img
+EXTEND_SVC_TYPE=$extend_svc_type
+RUNNING_MODE=$running_mode
+STORAGE=$storage
+HUB_USER=$docker_hub_username
+HUB_SERVER=$docker_hub_registry
+HUB_TOKEN=$docker_hub_token
+IM_TOKEN=$im_token
+DB_STARTUP_GRACE=$db_startup_grace
+EOF
+
     echo "[info]: variables"
-    echo "datapath  : $data_path"
-    echo "ip(pri)   : $local_pri_ip_address"
-    echo "ip(pub)   : $local_pub_ip_address"
-    echo "ip(pbx)   : $pbx_ip_address"
-    echo "im img    : $im_img new/$new_im_img"
-    echo "db img    : $db_img"
-    echo "token     : $im_token"
-    echo "storage   : $storage"
+    echo "datapath         : $data_path"
+    echo "ip(pri)          : $local_pri_ip_address"
+    echo "ip(pub)          : $local_pub_ip_address"
+    echo "ip(pbx)          : $pbx_ip_address"
+    echo "im img           : $im_img new/$new_im_img"
+    echo "db img           : $db_img"
+    echo "storage          : $storage"
+    echo "db startup period: $db_startup_grace"
 
     # remove container
     echo "[info]: start upgrade"
-    docker compose -f ${im_compose_file} down -v > /dev/null
-    # remove docker image
-    # docker image rm -f $im_img > /dev/null 2>&1
+    if docker ps -a --format '{{.Names}}' | grep -qw 'portsip.instantmessage'; then
+        docker compose -f ${im_compose_file} down -v > /dev/null
+    else
+        echo "[info]: not found service"
+    fi
     echo "[info]: the old service has been deleted"
-    # re-create
     paras=
     if [ $running_mode -eq 1  ]; then
         paras="-E "
@@ -781,7 +849,7 @@ upgrade(){
     fi
     if [ -z $im_img ]; then
         echo "[error]: unknown the docker image of im"
-        exit -1
+        exit 1
     fi
     paras="$paras -i $im_img"
     paras="${paras} -t ${im_token}"
@@ -799,8 +867,18 @@ upgrade(){
         if [ ! -z $pbx_ip_address ]; then
             paras="$paras -x $pbx_ip_address"
         fi
+        if [ ! -z $docker_hub_username ]; then
+            paras="$paras -U $docker_hub_username"
+        fi
+        if [ ! -z $docker_hub_token ]; then
+            paras="$paras -P $docker_hub_token"
+        fi
+        if [ ! -z $docker_hub_registry ]; then
+            paras="$paras -R $docker_hub_registry"
+        fi
     fi
 
+    cd ../
     command="create run $paras"
     $command
 
@@ -877,5 +955,6 @@ upgrade)
 
 *)
     echo "[error]: unknown command $1"
+    exit 1
     ;;
 esac

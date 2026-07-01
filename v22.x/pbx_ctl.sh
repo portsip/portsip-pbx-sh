@@ -7,7 +7,7 @@ firewall_predfined_ports="8887-8889/tcp 8885/tcp 4222/tcp 80/tcp 443/tcp 5060/ud
 if [ -z $1 ];
 then
     echo "[error]: unknown command"
-    exit -1
+    exit 1
 fi
 
 if [ ! -d "./pbx" ]; then
@@ -21,6 +21,8 @@ docker_hub_registry=
 #Authenticate to a registry.
 docker_hub_username=
 docker_hub_token=
+
+db_startup_grace=90
 
 cd pbx
 
@@ -259,15 +261,16 @@ services:
       - PGDATA=/var/lib/postgresql/data
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${pbx_db_password}
+      - PGPASSWORD=${pbx_db_password}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --auth=md5 --auth-host=md5 --data-checksums
       - POSTGRES_HOST_AUTH_METHOD=md5
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "postgres" ]
-      interval: 3s
-      timeout: 1s
+      interval: 30s
+      timeout: 3s
       retries: 10
-      start_period: 3s
+      start_period: ${db_startup_grace}s
 
   nats: 
     image: ${pbx_img}
@@ -281,10 +284,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8222"]
-      interval: 3s
-      timeout: 1s
+      interval: 30s
+      timeout: 3s
       retries: 10
-      start_period: 3s
+      start_period: 90s
 
   callmanager: 
     image: ${pbx_img}
@@ -797,37 +800,23 @@ stop() {
 }
 
 rm() {
-    # remove command firstly
-    # shift
-
-    # remove_data=false
-
-    # # parse parameters
-    # while getopts f option
-    # do 
-    #     case "${option}" in
-    #         f)
-    #             remove_data=true
-    #             ;;
-    #     esac
-    # done
-
     #firewall-cmd -q --permanent --delete-service=${firewall_svc_name} || true
     #firewall-cmd --reload
+    if [ ! -f "$pbx_deploy_config_file" ]; then 
+        echo "[error]: the configures that the pbx service depends on are lost."
+        exit 1
+    fi
+    if [ ! -f "docker-compose-portsip-pbx.yml" ]; then 
+        echo "[error]: the configures that the compose depends on are lost."
+        exit 1
+    fi
+    data_path=$(sed -n '/^PBX_DATA_PATH/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     echo "[info]: remove pbx service"
     docker compose -f docker-compose-portsip-pbx.yml down -v > /dev/null
-    echo "[info]: removed"
-
-    #docker volume rm `docker volume ls  -q | grep pbx-data` || true
-    #docker volume rm `docker volume ls  -q | grep pbx-db` || true
+    echo "[info]: host bind-mount data preserved at $data_path after the teardown."
+    echo "[info]: service removed"
 }
 
-# init or upgrade
-# $1: pbx_data_path
-# $2: pbx_ip_address
-# $3: pbx_img
-# $4: pbx_db_img
-# $5: pbx_db_password
 export_configure_crt_or_up() {
     local pbx_data_path=$1
     local pbx_ip_address=$2
@@ -865,15 +854,16 @@ services:
       - PGDATA=/var/lib/postgresql/data
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${pbx_db_password}
+      - PGPASSWORD=${pbx_db_password}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --auth=md5 --auth-host=md5 --data-checksums
       - POSTGRES_HOST_AUTH_METHOD=md5
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "postgres" ]
-      interval: 3s
-      timeout: 1s
+      interval: 30s
+      timeout: 3s
       retries: 10
-      start_period: 3s
+      start_period: ${db_startup_grace}s
 
   initdt:
     image: ${pbx_img}
@@ -894,10 +884,6 @@ FEOF
 }
 
 create() {
-    #remove old
-    #echo "[run] stop and remove old pbx"
-    #rm
-
     # init or upgrade pbx
     echo "[info]: try to deploy pbx service"
     #echo " args: $@"
@@ -921,7 +907,7 @@ create() {
     local pbx_pre_version=
     local pbx_new_version=
     # parse parameters
-    while getopts p:a:i:d:f:U:P:R: option
+    while getopts p:a:i:d:f:U:P:R:g: option
     do 
         case "${option}" in
             p)
@@ -948,27 +934,35 @@ create() {
             R)
                 docker_hub_registry=${OPTARG}
                 ;;
+            g)
+                db_startup_grace=${OPTARG}
+                ;;
         esac
     done
 
     # check parameters is exist
     if [ -z "$data_path" ]; then
         echo "[error]: option -p not specified"
-        exit -1
+        exit 1
     fi
     if [ -z "$ip_address" ]; then
         echo "[error]: option -a not specified"
-        exit -1
+        exit 1
     fi
     if [ -z "$pbx_img" ]; then
         echo "[error]: option -i not specified"
-        exit -1
+        exit 1
     fi
 
     if [ -z "$db_img" ]; then
         echo "[error]: option -d not specified"
-        exit -1
+        exit 1
     fi
+
+    if [ -z "$db_startup_grace" ]; then
+        db_startup_grace=90
+    fi
+    echo "[info]: db start period = $db_startup_grace"
 
     if [ ! -z "$docker_hub_username" ] && [ ! -z "$docker_hub_token" ]; then
         echo "[info]: docker login -u $docker_hub_username $docker_hub_registry"
@@ -993,7 +987,7 @@ create() {
     if [ ! -z "$storage" ]; then
       if [ ! -d "$storage" ]; then
           echo "[error]: storage datapath $storage not exist, exit"
-          exit -1
+          exit 1
       else
           chmod 755 "$storage"
           chown 888:888 "$storage"
@@ -1008,7 +1002,7 @@ create() {
 
     if [ -z "$db_password" ]; then
         echo "[error]: empty database password"
-        exit -1
+        exit 1
     fi
 
     if [ -f $data_path/pbx/VERSION ]; then
@@ -1016,13 +1010,14 @@ create() {
     fi
 
     echo "[info]: variables"
-    echo "    datapath: $data_path"
-    echo "    ip      : $ip_address"
-    echo "    pbx  img: $pbx_img"
-    echo "    db   img: $db_img"
-    echo "     storage: $storage"
-    echo "    hub user: $docker_hub_username"
-    echo "  hub server: $docker_hub_registry"
+    echo "        datapath: $data_path"
+    echo "        ip      : $ip_address"
+    echo "        pbx  img: $pbx_img"
+    echo "        db   img: $db_img"
+    echo "         storage: $storage"
+    echo "        hub user: $docker_hub_username"
+    echo "      hub server: $docker_hub_registry"
+    echo "db startup grace: $db_startup_grace"
 
     # change directory mode
     chmod 755 $data_path
@@ -1037,15 +1032,19 @@ DB_PASSWORD=$db_password
 STORAGE=$storage
 HUB_USER=$docker_hub_username
 HUB_SERVER=$docker_hub_registry
+HUB_TOKEN=$docker_hub_token
+DB_STARTUP_GRACE=$db_startup_grace
 EOF
 
     # get product version
     echo "[info]: docker pull $pbx_img"
     docker image pull $pbx_img > /dev/null
+    echo "[info]: docker pull $db_img"
+    docker image pull $db_img > /dev/null
     pbx_new_version=$(export_pbx_production_version $pbx_img)
     if [ -z "$pbx_new_version" ]; then
         echo "[error]: not found label 'version' in the pbx image"
-        exit -1
+        exit 1
     fi
 
     if [ -z "$pbx_pre_version" ]; then
@@ -1063,7 +1062,7 @@ EOF
     if [ $crtOrUpRetEnv -ne 0 ]; then
         docker compose -f docker-compose-portsip-pbx-init.yml down -v > /dev/null
         echo "[error]: init or upgrade env"
-        exit -1
+        exit 1
     fi
     echo "[info]: initdt start "
     docker compose -f docker-compose-portsip-pbx-init.yml exec initdt /usr/local/bin/initdt.sh -D /var/lib/portsip/pbx --pg-superuser-name postgres --pg-superuser-password ${db_password}
@@ -1072,7 +1071,7 @@ EOF
     docker compose -f docker-compose-portsip-pbx-init.yml down -v > /dev/null
     if [ $crtOrUpRet -ne 0 ]; then
         echo "[error]: init or upgrade"
-        exit -1
+        exit 1
     fi
 
     set -e
@@ -1124,13 +1123,17 @@ upgrade(){
     shift
 
     new_pbx_img=
+    new_db_startup_grace=
 
     # parse parameters
-    while getopts i: option
+    while getopts i:g: option
     do 
         case "${option}" in
             i)
                 new_pbx_img=${OPTARG}
+                ;;
+            g)
+                new_db_startup_grace=${OPTARG}
                 ;;
         esac
     done
@@ -1140,7 +1143,7 @@ upgrade(){
 
     if [ ! -f "$pbx_deploy_config_file" ]; then 
         echo "[error]: the configures that the pbx service depends on are lost."
-        exit -1
+        exit 1
     fi
 
     # read configures from .configure_im
@@ -1150,17 +1153,34 @@ upgrade(){
     db_img=$(sed -n '/^PBX_DB_IMG/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     db_password=$(sed -n '/^DB_PASSWORD/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     storage=$(sed -n '/^STORAGE/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    used_db_startup_grace=$(sed -n '/^DB_STARTUP_GRACE/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_username=$(sed -n '/^HUB_USER/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_registry=$(sed -n '/^HUB_SERVER/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_token=$(sed -n '/^HUB_TOKEN/p' ${pbx_deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+
+    if [ -z "$new_db_startup_grace" ]; then
+        if [ ! -z "$used_db_startup_grace" ]; then
+            db_startup_grace=$used_db_startup_grace
+        fi
+    else
+        db_startup_grace=$new_db_startup_grace
+    fi
 
     echo "[info]: variables"
-    echo "    datapath: $data_path"
-    echo "    ip      : $ip_address"
-    echo "    pbx  img: used/$pbx_img new/$new_pbx_img"
-    echo "    db   img: $db_img"
-    echo "     storage: $storage"
+    echo "         datapath: $data_path"
+    echo "         ip      : $ip_address"
+    echo "         pbx  img: used/$pbx_img new/$new_pbx_img"
+    echo "         db   img: $db_img"
+    echo "          storage: $storage"
+    echo "db startup period: $db_startup_grace"
 
     # remove container
     echo "[info]: start upgrade"
-    rm
+    if docker ps -a --format '{{.Names}}' | grep -qw 'portsip.callmanager'; then
+        rm
+    else
+        echo "[info]: not found old service"
+    fi
     echo "[info]: the old service has been deleted"
     # re-create
     paras="-p ${data_path} -a $ip_address -d $db_img"
@@ -1169,11 +1189,23 @@ upgrade(){
     fi
     if [ -z $pbx_img ]; then
         echo "[error]: unknown the docker image of pbx"
-        exit -1
+        exit 1
     fi
     paras="$paras -i $pbx_img"
     if [ ! -z $storage ]; then
         paras="$paras -f $storage"
+    fi
+    if [ ! -z $docker_hub_username ]; then
+        paras="$paras -U $docker_hub_username"
+    fi
+    if [ ! -z $docker_hub_token ]; then
+        paras="$paras -P $docker_hub_token"
+    fi
+    if [ ! -z $docker_hub_registry ]; then
+        paras="$paras -R $docker_hub_registry"
+    fi
+    if [ ! -z $db_startup_grace ]; then
+        paras="$paras -g $db_startup_grace"
     fi
 
     command="create run $paras"
@@ -1232,6 +1264,7 @@ upgrade)
 
 *)
     echo "[error]: unknown command $1"
+    exit 1
     ;;
 
 esac

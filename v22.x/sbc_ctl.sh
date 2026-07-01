@@ -4,13 +4,21 @@ set -e
 firewall_svc_name="portsip-sbc"
 firewall_predfined_ports="25000-34999/udp 5066/udp 5065/tcp 5067/tcp 5069/tcp 8882/tcp 8883/tcp 10443/tcp"
 
+data_path=
+sbc_img=
 #Defaults to Docker Hub if no server is specified
 docker_hub_registry=
 #Authenticate to a registry.
 docker_hub_username=
 docker_hub_token=
 
-echo "[info]: Starting..."
+if [ ! -d "./sbc" ]; then
+    mkdir sbc
+fi
+
+deploy_config_file=".configure_sbc"
+
+echo "[info]: starting..."
 
 create_help() {
     echo  " command run options:"
@@ -28,10 +36,9 @@ command_help() {
     echo  "     rm"
 }
 
-if [ -z $1 ];
-then 
+if [ -z $1 ]; then 
     command_help
-    exit
+    exit 1
 fi
 
 set_firewall(){
@@ -84,6 +91,8 @@ EOF
 create() {
     echo "[info]: try to create sbc service"
 
+    cd sbc
+
     set_firewall
 
     config_sysctls
@@ -91,8 +100,6 @@ create() {
     # remove command firstly
     shift
 
-    data_path=
-    sbc_img=
     # parse parameters
     while getopts p:i:U:P:R: option
     do 
@@ -153,6 +160,7 @@ SBC_DATA_PATH=$data_path
 SBC_IMG=$sbc_img
 HUB_USER=$docker_hub_username
 HUB_SERVER=$docker_hub_registry
+HUB_TOKEN=$docker_hub_token
 EOF
 
     # run sbc service
@@ -214,11 +222,13 @@ restart() {
     if [ -z "$service_name" ]; then
         echo "[info]: restart all services"
         docker restart -t 300 portsip.sbc
+        echo "[info]: all services restarted"
         exit
     fi
 
     echo "[info]: restart service $service_name"
     docker exec portsip.sbc supervisorctl restart $service_name
+    echo "[info]: service $service_name restarted"
 }
 
 start() {
@@ -241,9 +251,11 @@ start() {
     if [ -z "$service_name" ]; then
         echo "[info]: start all services"
         docker start portsip.sbc
+        echo "[info]: all services started"
     else
         echo "[info]: start service $service_name"
         docker exec portsip.sbc supervisorctl start $service_name
+        echo "[info]: service $service_name started"
     fi
 }
 
@@ -267,10 +279,12 @@ stop() {
     if [ -z "$service_name" ]; then
         echo "[info]: stop all services"
         docker stop -t 300 portsip.sbc
+        echo "[info]: all services stopped"
         exit
     fi
     echo "[info]: stop service $service_name"
     docker exec portsip.sbc supervisorctl stop $service_name
+    echo "[info]: service $service_name stopped"
 }
 
 rm() {
@@ -283,6 +297,23 @@ rm() {
     #firewall-cmd --reload
     docker stop -t 300 portsip.sbc
     docker rm -f portsip.sbc
+
+    deploy_file=
+    if [ -f "$deploy_config_file" ]; then 
+        deploy_file=$deploy_config_file
+    fi
+    if [ -f "sbc/$deploy_config_file" ]; then 
+        deploy_file="sbc/$deploy_config_file"
+    fi
+
+    if [ ! -f "$deploy_file" ]; then 
+        echo "[info]: service removed"
+        exit
+    fi
+
+    used_sbc_datapath=$(sed -n '/^SBC_DATA_PATH/p' ${deploy_file} | awk 'BEGIN{FS="="}{print $2}')
+    echo "[info]: host bind-mount data preserved at $used_sbc_datapath after the teardown."
+    echo "[info]: service removed"
 }
 
 upgrade(){
@@ -300,34 +331,64 @@ upgrade(){
         esac
     done
 
-    # check the container exist
-    docker inspect portsip.sbc > /dev/null
-    # get docker image id
-    used_sbc_img=$(docker ps -a --filter "name=^portsip.sbc$" --format "{{.Image}}")
-    echo "[info]: used/$used_sbc_img new/$new_sbc_img"
-    # get data path
-    used_sbc_datapath=$(docker inspect -f '{{range .Mounts}}{{if gt (len .Source) 4}}{{if eq (slice .Source (slice .Source 3|len)) "sbc"}}{{slice .Source 0 (slice .Source 4|len)}} {{end}}{{end}}{{end}}' portsip.sbc)
-    if [ -z "$used_sbc_datapath" ]; then
-        echo "[error]: data path is empty"
-        exit -1
+    deploy_file=
+    if [ -f "$deploy_config_file" ]; then 
+        deploy_file=$deploy_config_file
     fi
-    
-    # remove container
-    docker stop -t 60 portsip.sbc > /dev/null 2>&1 || true
-    docker rm -f portsip.sbc > /dev/null 2>&1
-    # remove docker image
-    docker image rm -f $used_sbc_img > /dev/null 2>&1
-    # re-create
-    echo "[info]: start upgrade"
+    if [ -f "sbc/$deploy_config_file" ]; then 
+        deploy_file="sbc/$deploy_config_file"
+    fi
+
+    if [ ! -f "$deploy_file" ]; then 
+        echo "[error]: the configures that the sbc service depends on are lost."
+        exit 1
+    fi
+
+    used_sbc_datapath=$(sed -n '/^SBC_DATA_PATH/p' ${deploy_file} | awk 'BEGIN{FS="="}{print $2}')
+    used_sbc_img=$(sed -n '/^SBC_IMG/p' ${deploy_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_username=$(sed -n '/^HUB_USER/p' ${deploy_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_registry=$(sed -n '/^HUB_SERVER/p' ${deploy_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_token=$(sed -n '/^HUB_TOKEN/p' ${deploy_file} | awk 'BEGIN{FS="="}{print $2}')
+
+    echo "[info]: sbc img : $used_sbc_img new/$new_sbc_img"
+    echo "[info]: datapath: $used_sbc_datapath"
+
+    if [ -z "$used_sbc_datapath" ]; then
+        echo "[error]: data path not setup"
+        exit 1
+    fi
+
     sbc_img=$new_sbc_img
     if [ -z $sbc_img ]; then
         sbc_img=$used_sbc_img
     fi
     if [ -z $sbc_img ]; then
-        echo "[error]: unknown the docker image of sbc"
-        exit -1
+        echo "[error]: unknown sbc image"
+        exit 1
     fi
-    create run -i $sbc_img -p $used_sbc_datapath
+    
+    echo "[info]: start upgrade"
+    if docker ps -a --format '{{.Names}}' | grep -qw 'portsip.sbc'; then
+        # remove container
+        rm none
+    else
+        echo "[info]: not found service"
+    fi
+
+    paras="-i $sbc_img -p $used_sbc_datapath"
+    if [ ! -z $docker_hub_username ]; then
+        paras="$paras -U $docker_hub_username"
+    fi
+    if [ ! -z $docker_hub_token ]; then
+        paras="$paras -P $docker_hub_token"
+    fi
+    if [ ! -z $docker_hub_registry ]; then
+        paras="$paras -R $docker_hub_registry"
+    fi
+
+    command="create run $paras"
+    $command
+
     echo "[info]: upgraded"
 }
 
@@ -401,5 +462,6 @@ upgrade)
 
 *)
     command_help
+    exit 1
     ;;
 esac

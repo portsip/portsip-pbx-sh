@@ -42,7 +42,7 @@ echo "[info]: Starting..."
 if [ -z $1 ];
 then 
     echo "[error]: unknown command"
-    exit -1
+    exit 1
 fi
 
 if [ ! -d "./trace_server" ]; then
@@ -234,7 +234,7 @@ create() {
 
     if [ -z "$db_password" ]; then
         echo "[error]: Password is empty"
-        exit -1
+        exit 1
     fi
 
     # check parameters is exist
@@ -388,5 +388,6 @@ rm)
 
 *)
     echo "[error]: unknown command $1"
+    exit 1
     ;;
 esac

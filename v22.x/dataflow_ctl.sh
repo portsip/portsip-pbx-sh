@@ -3,7 +3,7 @@ set -e
 
 if [ -z $1 ]; then 
     echo "[error]: unknown command"
-    exit -1
+    exit 1
 fi
 
 # -p
@@ -22,7 +22,7 @@ pbx_ip_address=
 dataflow_img=portsip/pbx:22
 
 # -d
-db_img="portsip/clickhouse:25.8"
+db_img="portsip/clickhouse:26.3"
 
 production_version=
 
@@ -44,6 +44,8 @@ docker_hub_registry=
 #Authenticate to a registry.
 docker_hub_username=
 docker_hub_token=
+
+db_startup_grace=90
 
 echo "[info]: Starting..."
 
@@ -91,7 +93,7 @@ is_production_version_less_than_22_3() {
 parse_cmd_parameters() {
     echo "[info]: args $@"
     
-    while getopts d:p:a:A:x:i:U:P:R: option
+    while getopts d:p:a:A:x:i:U:P:R:g: option
     do 
         case "${option}" in
             p)
@@ -121,6 +123,9 @@ parse_cmd_parameters() {
             R)
                 docker_hub_registry=${OPTARG}
                 ;;
+            g)
+                db_startup_grace=${OPTARG}
+                ;;
         esac
     done
 }
@@ -129,34 +134,34 @@ verify_parameters() {
         # check parameters is exist
     if [ -z "$data_path" ]; then
         echo "[error]: Option -p not specified"
-        exit -1
+        exit 1
     fi
 
     if [ -z "$dataflow_img" ]; then
         echo "[error]: Option -i not specified"
-        exit -1
+        exit 1
     fi
 
     # extend service
     if [ -z "$pbx_ip_address" ]; then
         echo "[error]: Option -x not specified"
-        exit -1
+        exit 1
     fi
 
     if [ -z "$db_img" ]; then
         echo "[error]: Option -d not specified"
-        exit -1
+        exit 1
     fi
     
     # ret=$(docker compose ls -a -q | grep pbx | wc -l)
     # if [ $ret -ne 0 ]; then
     #     echo "[error]: already exist pbx on this host(containers)"
-    #     exit -1
+    #     exit 1
     # fi
 
     if [ -z "$local_pri_ip_address" ] && [ -z "$local_pub_ip_address" ]; then
         echo "[error]: Option -a and -A not specified"
-        exit -1
+        exit 1
     fi
     echo "[info]: run as STANDALONE mode"
 }
@@ -238,6 +243,7 @@ services:
     network_mode: host
     user: root
     container_name: "portsip.clickhouse"
+    stop_grace_period: 600s
     volumes:
       - /etc/localtime:/etc/localtime
       - df-db-data:/var/lib/clickhouse
@@ -258,11 +264,11 @@ services:
         hard: 655360
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping && timeout 5 clickhouse-client --query 'SELECT 1'"]
-      interval: 300s
-      timeout: 10s
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping && timeout 30 clickhouse-client --query 'SELECT 1'"]
+      interval: 60s
+      timeout: 3s
       retries: 3
-      start_period: 300s
+      start_period: ${db_startup_grace}s
 
   initdt:
     image: ${dataflow_img}
@@ -319,6 +325,7 @@ services:
     network_mode: host
     user: root
     container_name: "portsip.clickhouse"
+    stop_grace_period: 600s
     volumes:
       - /etc/localtime:/etc/localtime
       - df-db-data:/var/lib/clickhouse
@@ -338,11 +345,11 @@ services:
         hard: 655360
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping && timeout 5 clickhouse-client --query 'SELECT 1'"]
-      interval: 300s
-      timeout: 10s
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping && timeout 30 clickhouse-client --query 'SELECT 1'"]
+      interval: 60s
+      timeout: 3s
       retries: 3
-      start_period: 300s
+      start_period: ${db_startup_grace}s
 
   dataflow: 
     image: ${dataflow_img}
@@ -351,6 +358,7 @@ services:
     user: portsip
     restart: unless-stopped
     container_name: "portsip.dataflow"
+    stop_grace_period: 60s
     depends_on:
       database:
         condition: service_healthy
@@ -377,7 +385,28 @@ start_extension(){
         echo "[warn]: db data path $dbpath/data not exist, try to create it"
         mkdir -p $dbpath/data
         echo "[info]: $dbpath/data created"
+    else
+        # remove system logs
+        echo "[info]: try to delete system logs"
+        logs_datapath="
+trace_log
+text_log
+query_log
+metric_log
+asynchronous_metric_log
+part_log
+query_views_log
+"
+        for ldp in $logs_datapath; do
+            log_link_dir="$dbpath/data/data/system/$ldp"
+            if [ -d "$log_link_dir" ]; then
+                rm -rf $(realpath $log_link_dir) || true
+            fi
+            rm -f $log_link_dir || true
+        done
+        echo "[info]: db system logs removed"
     fi
+
     if [ ! -d "$dbpath/log" ]; then
         echo "[warn]: db log path $dbpath/log not exist, try to create it"
         mkdir -p $dbpath/log
@@ -410,16 +439,17 @@ start_extension(){
     if [ $crtOrUpRetEnv -ne 0 ]; then
         docker compose -f ${compose_ini_file} down -v > /dev/null
         echo "[error]: init or upgrade env"
-        exit -1
+        exit 1
     fi
     echo "[info]: initdt start "
+    sleep 60
     docker compose -f ${compose_ini_file} exec -u root initdt /usr/local/bin/initdt_dataflow.sh initdt -D /var/lib/portsip/dataflow  --password ${db_password}
     local crtOrUpRet=$?
     echo "[info]: initdt done"
     docker compose -f ${compose_ini_file} down -v > /dev/null
     if [ $crtOrUpRet -ne 0 ]; then
         echo "[error]: init or upgrade"
-        exit -1
+        exit 1
     fi
 
     set -e
@@ -458,14 +488,15 @@ create() {
     cd $extend_svc_type
 
     echo "[info]: variables"
-    echo "datapath      : $data_path"
-    echo "ip(pri)       : $local_pri_ip_address"
-    echo "ip(pub)       : $local_pub_ip_address"
-    echo "ip(pbx)       : $pbx_ip_address"
-    echo "dataflow img  : $dataflow_img"
-    echo "db img        : $db_img"
-    echo "hub user      : $docker_hub_username"
-    echo "hub server    : $docker_hub_registry"
+    echo "datapath          : $data_path"
+    echo "ip(pri)           : $local_pri_ip_address"
+    echo "ip(pub)           : $local_pub_ip_address"
+    echo "ip(pbx)           : $pbx_ip_address"
+    echo "dataflow img      : $dataflow_img"
+    echo "db img            : $db_img"
+    echo "hub user          : $docker_hub_username"
+    echo "hub server        : $docker_hub_registry"
+    echo "db startup grace  : $db_startup_grace"
 
     # get product version
     docker image pull $dataflow_img
@@ -473,7 +504,7 @@ create() {
     production_version=$(export_production_version)
     if [ -z "$production_version" ]; then
         echo "[error]: no 'version' information found in the docker image"
-        exit -1
+        exit 1
     fi
     echo "[info]: current version $production_version"
 
@@ -481,7 +512,7 @@ create() {
     # ret: 1 for success and 0 for failure
     if [ $ret -eq 1 ]; then
       echo "[error]: version $production_version < 22.3.0"
-      exit -1
+      exit 1
     fi
 
     # write configure file
@@ -495,6 +526,8 @@ DB_IMG=$db_img
 EXTEND_SVC_TYPE=$extend_svc_type
 HUB_USER=$docker_hub_username
 HUB_SERVER=$docker_hub_registry
+HUB_TOKEN=$docker_hub_token
+DB_STARTUP_GRACE=$db_startup_grace
 EOF
 
     #set_firewall
@@ -517,12 +550,12 @@ op() {
     # check parameters is exist
     if [ -z "$extend_svc_type" ]; then
         echo "[error]: option -s not specified"
-        exit -1
+        exit 1
     fi
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
         echo "[error]: no service configuration found, not exist directory ${extend_svc_type}"
-        exit -1
+        exit 1
     fi
     cd $extend_svc_type
 
@@ -533,6 +566,7 @@ op() {
         docker compose -f ${compose_file} stop -t 300 > /dev/null
         sleep 3
         docker compose -f ${compose_file} start > /dev/null
+        echo "[info]: service restarted"
         ;;
 
     status)
@@ -542,19 +576,24 @@ op() {
 
     stop)
         docker compose -f ${compose_file} stop -t 300 > /dev/null
+        echo "[info]: service stopped"
         ;;
 
     start)
         docker compose -f ${compose_file} start > /dev/null
+        echo "[info]: service started"
         ;;
 
     rm)
+        dpath=$(sed -n '/^DATA_PATH/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
         docker compose -f ${compose_file} down -v > /dev/null
+        echo "[info]: host bind-mount data preserved at $dpath after the teardown."
+        echo "[info]: service removed"
         ;;
     
     *)
         echo "[error]: unknown command $operator"
-        exit -1
+        exit 1
         ;;
     esac
 }
@@ -563,29 +602,35 @@ upgrade(){
     shift
 
     new_img=
+    new_db_startup_grace=
+    new_db_img=
 
     # parse parameters
-    while getopts i: option
+    while getopts i:d:g: option
     do 
         case "${option}" in
             i)
                 new_img=${OPTARG}
                 ;;
+            d)
+                new_db_img=${OPTARG}
+                ;;
+            g)
+                new_db_startup_grace=${OPTARG}
+                ;;
         esac
     done
 
-    # check the container exist
-    docker inspect portsip.dataflow > /dev/null
     # change work directory
     if [ ! -d "./$extend_svc_type" ]; then
-        echo "[error]: the resources that the dataflow service depends on are lost."
-        exit -1
+        echo "[error]: required configuration directory(${extend_svc_type}) are missing."
+        exit 1
     fi
     cd $extend_svc_type
 
     if [ ! -f "$deploy_config_file" ]; then 
-        echo "[error]: the configures that the dataflow service depends on are lost."
-        exit -1
+        echo "[error]: required configuration file(${deploy_config_file}) are missing."
+        exit 1
     fi
 
     # read configures from .configure_dataflow
@@ -596,32 +641,58 @@ upgrade(){
     dataflow_img=$(sed -n '/^DATAFLOW_IMG/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     db_img=$(sed -n '/^DB_IMG/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
     #extend_svc_type=$(sed -n '/^EXTEND_SVC_TYPE/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    db_startup_grace=$(sed -n '/^DB_STARTUP_GRACE/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_username=$(sed -n '/^HUB_USER/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_registry=$(sed -n '/^HUB_SERVER/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
+    docker_hub_token=$(sed -n '/^HUB_TOKEN/p' ${deploy_config_file} | awk 'BEGIN{FS="="}{print $2}')
 
     echo "[info]: variables"
-    echo "datapath        : $data_path"
-    echo "ip(pri)         : $local_pri_ip_address"
-    echo "ip(pub)         : $local_pub_ip_address"
-    echo "ip(pbx)         : $pbx_ip_address"
-    echo "dataflow img    : $dataflow_img new/$new_img"
-    echo "db img          : $db_img"
+    echo "datapath            : $data_path"
+    echo "ip(pri)             : $local_pri_ip_address"
+    echo "ip(pub)             : $local_pub_ip_address"
+    echo "ip(pbx)             : $pbx_ip_address"
+    echo "dataflow img        : $dataflow_img new/$new_img"
+    echo "db img              : $db_img new/$new_db_img"
+    echo "hub user            : $docker_hub_username"
+    echo "hub server          : $docker_hub_registry"
+    echo "db startup grace    : $db_startup_grace"
+
+    if [ ! -z "$new_img" ]; then
+        dataflow_img="$new_img"
+    fi
+    if [ ! -z "$new_db_startup_grace" ]; then
+        db_startup_grace="$new_db_startup_grace"
+    fi
+    if [ -z "$db_startup_grace" ]; then
+        db_startup_grace=90
+    fi
+    if [ -z $dataflow_img ]; then
+        echo "[error]: unknown the dataflow image"
+        exit 1
+    fi
+    if [ ! -z $new_db_img ]; then
+        db_img=$new_db_img
+    fi
+    if [ -z "$db_img" ]; then
+        echo "[error]: unknown the db image"
+        exit 1
+    fi
 
     # remove container
     echo "[info]: start upgrade"
-    docker compose -f ${compose_file} down -v > /dev/null
+    if docker ps -a --format '{{.Names}}' | grep -qw 'portsip.dataflow'; then
+        docker compose -f ${compose_file} down -v --timeout 60 > /dev/null
+    else
+        echo "[info]: not found service $extend_svc_type"
+    fi
     # remove docker image
     # docker image rm -f $dataflow_img > /dev/null 2>&1
     echo "[info]: the old service has been deleted"
     # re-create
     paras="-p ${data_path}"
-    if [ ! -z "$new_img" ]; then
-        dataflow_img="$new_img"
-    fi
-    if [ -z $dataflow_img ]; then
-        echo "[error]: unknown the docker image of dataflow"
-        exit -1
-    fi
     paras="$paras -i $dataflow_img"
     paras="$paras -d $db_img"
+    paras="$paras -g $db_startup_grace"
     if [ ! -z $local_pri_ip_address ]; then
         paras="$paras -a $local_pri_ip_address"
     fi
@@ -631,7 +702,17 @@ upgrade(){
     if [ ! -z $pbx_ip_address ]; then
         paras="$paras -x $pbx_ip_address"
     fi
+    if [ ! -z $docker_hub_username ]; then
+        paras="$paras -U $docker_hub_username"
+    fi
+    if [ ! -z $docker_hub_token ]; then
+        paras="$paras -P $docker_hub_token"
+    fi
+    if [ ! -z $docker_hub_registry ]; then
+        paras="$paras -R $docker_hub_registry"
+    fi
 
+    cd ../
     command="create run $paras"
     $command
 
@@ -708,5 +789,6 @@ upgrade)
 
 *)
     echo "[error]: unknown command $1"
+    exit 1
     ;;
 esac

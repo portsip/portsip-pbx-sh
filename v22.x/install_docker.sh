@@ -1,143 +1,166 @@
-#!/bin/bash
+#!/bin/sh
 
-set -ex
+set -e
 
-echo "[info]: Starting..."
+# ============================================================
+# install_docker.sh
+# Install Docker (with Compose & plugins) + firewalld
+# Supports: Ubuntu / Debian (amd64 only)
+# Usage:    sudo /bin/sh install_docker.sh
+# ============================================================
 
-# install docker and docker compose plugin
-install_docker_on_centos(){
-    echo ""
-    echo "====>Starting to install on centos"
-    echo ""
-    yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
-    yum install -y yum-utils device-mapper-persistent-data lvm2 firewalld
-    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-    
-    yum makecache fast
-    echo ""
-    echo "====>Try to install docker"
-    echo ""
-    yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    systemctl enable docker
-    #systemctl stop docker
-    echo ""
-    echo "====>Successfully to install the docker"
-    echo ""
-}
+log_info()  { echo "[info]: $*"; }
+log_warn()  { echo "[warn]: $*"; }
+log_error() { echo "[error]: $*"; }
 
-install_docker_on_redhat(){
-    echo ""
-    echo "[docker] installing on redhat"
-    echo ""
-    yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine podman runc
-    yum install -y yum-utils device-mapper-persistent-data lvm2 firewalld
-    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-    yum update -y
-    
-    echo ""
-    echo "[docker] trying"
-    echo ""
-    yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    systemctl start docker
-    systemctl enable docker || exit -1
-    #systemctl stop docker
-    echo ""
-    echo "[docker] installed"
-    echo ""
-}
+# ---------- preflight checks ----------
 
-# install docker and docker compose plugin
-install_docker_on_ubuntu(){
-    echo ""
-    echo "====>Starting to install on ubuntu"
-    echo ""
-    echo "====>Try to update system"
-    echo ""
-    apt-get remove -y  docker docker-engine docker.io containerd runc || true
-    apt update -y
-    dpkg --configure -a || true
-    DEBIAN_FRONTEND=noninteractive apt upgrade -y || true
-    echo ""
-    echo "====>System updated"
-    echo ""
-    echo "====>Try to install the firewalld"
-    echo ""
-    DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg gnupg-agent software-properties-common firewalld lsb-release
-    echo ""
-    echo "====>Firewalld installed"
-    echo ""
-    mkdir -p /etc/apt/keyrings
-    rm -f /etc/apt/keyrings/docker.gpg || true
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get update -y 
-    echo ""
-    echo "====>Try to install the docker"
-    echo ""
-    DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-compose-plugin -y
-    systemctl enable docker
-    #systemctl stop docker
-    echo ""
-    echo "====Successfully to install the docker"
-    echo ""
-}
-
-# install docker and docker compose plugin
-install_docker_on_debian(){
-    echo ""
-    echo "====>Starting to install on debian"
-    echo ""
-    echo "====>Try to update system"
-    echo ""
-    apt-get remove docker docker-engine docker.io containerd runc || true
-    DEBIAN_FRONTEND=noninteractive apt update -y 
-    DEBIAN_FRONTEND=noninteractive apt upgrade -y
-    echo ""
-    echo "====>System updated"
-
-    echo ""
-    echo "====>Try to install the firewalld"
-    echo ""
-    DEBIAN_FRONTEND=noninteractive apt-get install apt-transport-https ca-certificates curl gnupg lsb-release firewalld procps -y
-    systemctl stop firewalld
-    echo ""
-    echo "====>Firewalld installed"
-    echo ""
-
-    echo "====>Try to install docker"
-    echo ""
-    rm -f /usr/share/keyrings/docker-archive-keyring.gpg
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get update -y
-    DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
-    systemctl enable docker
-    systemctl stop docker
-    echo ""
-    echo "====>Successfully to install the docker"
-    echo ""
-
-    sed -i 's#IndividualCalls=no#IndividualCalls=yes#g' /etc/firewalld/firewalld.conf
-    systemctl restart firewalld
-}
-
-if grep -q "CentOS" /etc/os-release; then
-    echo "[docker] System is CentOS"
-    install_docker_on_centos
-elif grep -q "Red Hat" /etc/os-release; then
-    echo "[docker] System is RedHat"
-    install_docker_on_redhat
-elif grep -q "Ubuntu" /etc/os-release; then
-    echo "[docker] System is Ubuntu"
-    apt remove -y ufw || true
-    install_docker_on_ubuntu
-elif grep -q "Debian" /etc/os-release; then
-    echo "[docker] System is Debian"
-    apt remove -y ufw || true
-    install_docker_on_debian
-else
-    echo "[docker] Unknown operating system"
-    exit
+if [ "$(id -u)" -ne 0 ]; then
+    log_error "This script must be run as root."
+    echo "        sudo /bin/sh install_docker.sh"
+    exit 1
 fi
 
+if [ ! -f /etc/os-release ]; then
+    log_error "Cannot detect operating system (/etc/os-release not found)."
+    exit 1
+fi
+
+. /etc/os-release
+
+case "$ID" in
+    ubuntu|debian) ;;
+    *)
+        log_error "Unsupported OS: $ID"
+        log_error "This script only supports Ubuntu and Debian (amd64)."
+        exit 1
+        ;;
+esac
+
+ARCH=$(dpkg --print-architecture 2>/dev/null || uname -m)
+case "$ARCH" in
+    amd64|x86_64) ;;
+    *)
+        log_error "Unsupported architecture: $ARCH"
+        log_error "This script only supports amd64."
+        exit 1
+        ;;
+esac
+
+CODENAME="${VERSION_CODENAME:-}"
+if [ -z "$CODENAME" ]; then
+    log_error "Cannot determine distribution codename (VERSION_CODENAME is empty)."
+    exit 1
+fi
+
+log_info "Detected: $NAME ($CODENAME) on $ARCH"
+log_info "Starting Docker + firewalld installation..."
+
+# ---------- network check ----------
+
+log_info "Checking network connectivity..."
+if ! curl -s --connect-timeout 5 https://download.docker.com > /dev/null 2>&1; then
+    log_warn "Cannot reach download.docker.com — will try to proceed anyway."
+fi
+
+# ---------- clean up conflicting packages ----------
+
+log_info "Removing conflicting packages (if any)..."
+apt-get remove -y ufw 2>/dev/null || true
+for pkg in docker docker-engine docker.io containerd runc; do
+    apt-get remove -y "$pkg" 2>/dev/null || true
+done
+
+# ---------- update system ----------
+
+log_info "Updating package index..."
+if ! apt-get update -y; then
+    log_warn "apt-get update failed; attempting dpkg reconfigure..."
+    dpkg --configure -a
+    apt-get update -y
+fi
+
+log_info "Upgrading existing packages..."
+if ! DEBIAN_FRONTEND=noninteractive apt-get upgrade -y; then
+    log_warn "apt-get upgrade failed; attempting dpkg reconfigure..."
+    dpkg --configure -a
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+fi
+
+# ---------- install prerequisites + firewalld ----------
+
+log_info "Installing prerequisites and firewalld..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    firewalld
+
+log_info "Enabling and starting firewalld..."
+systemctl enable firewalld
+systemctl start firewalld || log_warn "firewalld could not be started (possibly already running)."
+
+# ensure IndividualCalls is enabled in firewalld
+if [ -f /etc/firewalld/firewalld.conf ]; then
+    log_info "Configuring firewalld IndividualCalls..."
+    sed -i 's#IndividualCalls=no#IndividualCalls=yes#g' /etc/firewalld/firewalld.conf
+fi
+
+# ---------- add Docker repository ----------
+
+log_info "Adding Docker GPG key..."
+mkdir -p /etc/apt/keyrings
+curl -fsSL "https://download.docker.com/linux/${ID}/gpg" \
+    -o /tmp/docker-gpg-key.tmp
+gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg < /tmp/docker-gpg-key.tmp
+rm -f /tmp/docker-gpg-key.tmp
+chmod a+r /etc/apt/keyrings/docker.gpg
+
+log_info "Adding Docker APT repository..."
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${ID} ${CODENAME} stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# ---------- install Docker ----------
+
+log_info "Installing Docker Engine, CLI, containerd, and Compose..."
+DEBIAN_FRONTEND=noninteractive apt-get update -y
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    docker-ce \
+    docker-ce-cli \
+    containerd.io \
+    docker-compose-plugin
+
+log_info "Enabling and starting Docker..."
+systemctl enable docker
+systemctl restart firewalld || log_warn "Failed to restart firewalld after config change."
 systemctl restart docker
+
+# ---------- verify ----------
+
+log_info "Verifying installation..."
+echo
+
+docker --version || log_error "Docker CLI not found."
+docker compose version || log_error "Docker Compose plugin not found."
+
+echo
+if systemctl is-active --quiet firewalld; then
+    log_info "firewalld is running."
+else
+    log_warn "firewalld is not running. Start it with: systemctl start firewalld"
+fi
+
+if systemctl is-active --quiet docker; then
+    log_info "Docker daemon is running."
+else
+    log_warn "Docker daemon is not running. Start it with: systemctl start docker"
+fi
+
+echo
+log_info "============================================"
+log_info " Installation complete!"
+log_info " Docker:         $(docker --version 2>/dev/null || echo 'N/A')"
+log_info " Docker Compose: $(docker compose version 2>/dev/null || echo 'N/A')"
+log_info "============================================"
