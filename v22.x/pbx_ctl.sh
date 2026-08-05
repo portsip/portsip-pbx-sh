@@ -685,6 +685,24 @@ status() {
     fi
 }
 
+svc_stopping_warn(){
+    echo "[warn]: Services are being gracefully stopped. The maximum waiting time is 5 minutes."
+    echo "[warn]: If the services do not stop within this period, they will be forcibly terminated."
+    echo "[warn]: Please do not interrupt the process or reboot the server."
+}
+
+svc_stopped_info(){
+    echo "[info]: services have been stopped successfully."
+}
+
+svc_starting_info(){
+    echo "[info]: attempting to start services"
+}
+
+svc_started_info(){
+    echo "[info]: services have been started successfully."
+}
+
 restart() {
     # remove command firstly
     shift
@@ -704,33 +722,45 @@ restart() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo "[info]: restart all services"
+        svc_stopping_warn
         docker compose -f docker-compose-portsip-pbx.yml stop -t 300 > /dev/null
+        svc_stopped_info
         sleep 10
+        svc_starting_info
         docker compose -f docker-compose-portsip-pbx.yml start > /dev/null
+        svc_started_info
         exit 0
     fi
 
     service_name=$(svc_name $service_name)
     echo "[info]: restart service $service_name"
+    svc_stopping_warn
     case $service_name in
     database)
         docker compose -f docker-compose-portsip-pbx.yml stop -t 300 > /dev/null
+        svc_stopped_info
         sleep 10
+        svc_starting_info
         docker compose -f docker-compose-portsip-pbx.yml start > /dev/null
         ;;
 
     nats)
         docker compose -f docker-compose-portsip-pbx.yml stop -t 300 > /dev/null
+        svc_stopped_info
         sleep 10
+        svc_starting_info
         docker compose -f docker-compose-portsip-pbx.yml start > /dev/null
         ;;
 
     *)
         docker compose -f docker-compose-portsip-pbx.yml stop -t 300 $service_name > /dev/null
+        svc_stopped_info
         sleep 1
+        svc_starting_info
         docker compose -f docker-compose-portsip-pbx.yml start $service_name > /dev/null
         ;;
     esac
+    svc_started_info
 }
 
 start() {
@@ -779,24 +809,28 @@ stop() {
     # check parameters is exist
     if [ -z "$service_name" ]; then
         echo "[info]: stop all services"
-        docker compose -f docker-compose-portsip-pbx.yml stop > /dev/null
+        svc_stopping_warn
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300 > /dev/null
+        svc_stopped_info
         exit 0
     fi
     service_name=$(svc_name $service_name)
     echo "[info]: stop service $service_name"
+    svc_stopping_warn
     case $service_name in
     database)
-        docker compose -f docker-compose-portsip-pbx.yml stop -t 100 > /dev/null
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300 > /dev/null
         ;;
 
     nats)
-        docker compose -f docker-compose-portsip-pbx.yml stop -t 100 > /dev/null
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300 > /dev/null
         ;;
 
     *)
-        docker compose -f docker-compose-portsip-pbx.yml stop -t 100 $service_name > /dev/null
+        docker compose -f docker-compose-portsip-pbx.yml stop -t 300 $service_name > /dev/null
         ;;
     esac
+    svc_stopped_info
 }
 
 rm() {
